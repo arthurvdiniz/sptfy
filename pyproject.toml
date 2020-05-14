@@ -1,0 +1,20 @@
+[tool.poetry]
+name = "sptfy"
+version = "0.1.0"
+description = "A small wrapper library for the Spotify API"
+authors = ["Arthur Diniz <arthurvdinizs@gmail.com>", "Eduardo Macedo <eduzemacedo@gmail.com>"]
+readme = "README.md"
+
+license = "MIT"
+
+[tool.poetry.dependencies]
+python = "^3.6"
+requests = "^2.23.0"
+aiohttp = "^3.6.2"
+
+[tool.poetry.dev-dependencies]
+pytest = "^5.4.2"
+
+[build-system]
+requires = ["poetry>=0.12"]
+build-backend = "poetry.masonry.api"
