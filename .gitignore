@@ -1,0 +1,7 @@
+
+# Compilation
+__pycache__/
+
+# Distribution / Packaging
+*.egg-info/
+*.egg
