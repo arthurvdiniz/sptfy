@@ -41,10 +41,10 @@ def sptfy_environment(monkeypatch):
     return client_id, client_secret, redirect_uri
 
 
-def authentication_header(client_id, client_secret):
+def authorization_header(client_id, client_secret):
     credentials_header = f'{client_id}:{client_secret}'.encode(encoding='ascii')
-    authentication_header = base64.b64encode(credentials_header)
-    return {'Authentication': f"Basic {authentication_header.decode('ascii')}"}
+    authorization_header = base64.b64encode(credentials_header)
+    return {'Authorization': f"Basic {authorization_header.decode('ascii')}"}
 
 
 def test_load_credentials_from_env(sptfy_environment):
@@ -96,14 +96,32 @@ def test_credentials_get_auth_header(sptfy_environment):
     # GIVEN: A client id and a client_secret
     client_id, client_secret, _ = sptfy_environment
     credentials = oauth.ClientCredentials(client_id, client_secret)
-    auth_header = authentication_header(credentials.client_id, credentials.client_secret)
+    auth_header = authorization_header(credentials.client_id, credentials.client_secret)
     
     # WHEN: authentication_header is called
-    header = credentials._authentication_header()
+    header = credentials._authorization_header()
 
     # THEN: The header should be a dict containing a base64 encoded
     # string that represents the client_id and client_secret
-    assert header['Authentication'] == auth_header['Authentication']
+    assert header['Authorization'] == auth_header['Authorization']
+
+
+def test_oauth_token_from_json():
+    # GIVEN: A dict with the token information
+    token = {
+        'access_token':  'random-string-from-server',
+        'scope': 'foo bar',
+        'expires_in': 3600,
+        'token_type': 'Bearer',
+    }
+
+    # WHEN: loading an OAuthToken from a json dict
+    oauth_token = oauth.OAuthToken.from_json(token)
+
+    # THEN: the scope parsed into a list
+    assert oauth_token.scope == ['foo', 'bar']
+    # Refresh token is optional (client credentials flow doesnt use it)
+    assert oauth_token.refresh_token == None
 
 
 def test_oauth_client_credentials_flow_from_env(sptfy_environment):
@@ -126,7 +144,7 @@ def test_oauth_client_credentials_request_token(sptfy_environment):
     # GIVEN: ClientCredentialsFlow object initialized with the client credentials
     client_id, client_secret, _ = sptfy_environment
     credentials = oauth.ClientCredentials(client_id, client_secret)
-    auth_header = authentication_header(credentials.client_id, credentials.client_secret)
+    auth_header = authorization_header(credentials.client_id, credentials.client_secret)
     credentials_flow = oauth.ClientCredentialsFlow(credentials)
 
     some_token = {
@@ -150,6 +168,27 @@ def test_oauth_client_credentials_request_token(sptfy_environment):
     assert token == some_token
     token_request = responses.calls[0].request
     # the header variables contains the Authentication header
-    assert token_request.headers['Authentication'] == auth_header['Authentication']
+    assert token_request.headers['Authorization'] == auth_header['Authorization']
     # The payload should indentify the grant_type
     assert token_request.body == 'grant_type=client_credentials'
+
+
+@responses.activate
+def test_oauth_client_credentials_request_token_should_raise_if_not_200(sptfy_environment):
+    # GIVEN: ClientCredentialsFlow initialized with the client credentials
+    client_id, client_secret, _ = sptfy_environment
+    credentials = oauth.ClientCredentials(client_id, client_secret)
+    credentials_flow = oauth.ClientCredentialsFlow(credentials)
+
+    # and the endpoint does not answer correctly
+    responses.add(
+        responses.POST,
+        oauth.OAUTH_TOKEN_ENDPOINT,
+        json={'error': 'Something went wrong'},
+        status=404
+    )
+
+    # WHEN: request_access_token is called
+    # THEN: it should raise an exception
+    with pytest.raises(oauth.SptfyOAuthError):
+        credentials_flow._request_access_token()

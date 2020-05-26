@@ -4,11 +4,36 @@
 """
 import os
 import base64
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict, NamedTuple, Any
 from requests import Session
 
 
 OAUTH_TOKEN_ENDPOINT = 'https://accounts.spotify.com/api/token'
+
+JsonDict = Dict[str, Any]
+
+
+class SptfyOAuthError(Exception):
+    pass
+
+
+class OAuthToken(NamedTuple):
+    access_token: str
+    scope: List[str]
+    expires_in: int
+    token_type: str
+    refresh_token: Optional[str] = None
+
+    @staticmethod
+    def from_json(json):
+        scopes = json['scope'].split()
+        return OAuthToken(
+            json['access_token'],
+            scopes,
+            json['expires_in'],
+            json['token_type'],
+            json.get('refresh_token')
+        )
 
 
 class ClientCredentials:
@@ -50,23 +75,32 @@ class ClientCredentials:
 
         return ClientCredentials(client_id, client_secret, redirect_uri)
 
-    def _authentication_header(self) -> Dict[str, str]:
-        encoded = f'{self.client_id}:{self.client_secret}'.encode('ascii')
+    def _authorization_header(self) -> Dict[str, str]:
+        """
+        Generates the authentication header with base64 encoded client credentials
+        as specified in the spotify documentation for authorization flows.
+        """
+        encoded = '{}:{}'.format(self.client_id, self.client_secret).encode('ascii')
         base64_code = base64.b64encode(encoded)
-        
-        return {'Authentication': f"Basic {base64_code.decode('ascii')}"}
+ 
+        return {'Authorization': f"Basic {base64_code.decode('ascii')}"}
 
 
 
 class ClientCredentialsFlow:
     """
         Manages getting an access token using the Spotify API client credentials flow.
-        This flow is used when the client is not representing an user
+        This flow is used when the client is not representing an user and it wants to
+        download data that is public available.
     """
     credentials: ClientCredentials
     _session: Session
 
-    def __init__(self, credentials: Optional[ClientCredentials] = None, session: Optional[Session] = None):
+    def __init__(
+            self,
+            credentials: Optional[ClientCredentials] = None,
+            session: Optional[Session] = None
+        ):
 
         if credentials:
             self.credentials = credentials
@@ -79,8 +113,11 @@ class ClientCredentialsFlow:
             self._session = Session()
 
     def _request_access_token(self):
+        """
+            Gets the access token from the token endpoint directly.
+        """
         payload = {'grant_type': 'client_credentials'}
-        auth_header = self.credentials._authentication_header()
+        auth_header = self.credentials._authorization_header()
 
         response = self._session.post(
             OAUTH_TOKEN_ENDPOINT,
@@ -88,4 +125,8 @@ class ClientCredentialsFlow:
             data=payload,
         )
 
-        return response.json() 
+        if response.status_code != 200:
+            print(response.text)
+            raise SptfyOAuthError(response.reason)
+
+        return response.json()
