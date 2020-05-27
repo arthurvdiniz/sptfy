@@ -8,7 +8,7 @@
 import os
 import time
 import base64
-from typing import Optional, List, Dict, NamedTuple, Any
+from typing import Optional, List, Dict
 from requests import Session
 
 from sptfy.types import JsonDict
@@ -23,8 +23,17 @@ class SptfyOAuthError(Exception):
 
 class OAuthToken:
     """
-        Represents the token return by an OAuth token endpoint.
-        the access_token gives access to the protected resource
+    Represents the token return by an OAuth token endpoint.
+    the access_token gives access to the protected resource
+
+    static methods
+    -------
+    from_json(json: JsonDict): Instantiates the class from a json dictionary
+
+    properties
+    -------
+    expires_at: time in seconds since epoch when this token will expire
+    is_expired: checks if this token has expired
     """
     access_token: str
     scope: List[str]
@@ -40,7 +49,16 @@ class OAuthToken:
             expires_in: int,
             token_type: str,
             refresh_token: Optional[str] = None
-        ):
+    ):
+        """
+        :param access_token: The OAuth access_token, used when accessing
+            protected resources
+        :param scope: The list of scopes assigned to this token
+        :param expires_in: time in seconds until this token expires
+        :param token_type: The OAuth token type (normally set to 'Bearer')
+        :param refresh_token: Used in authorization code flow so the client
+            can request new tokens without redirecting the user.
+        """
         self.access_token = access_token
         self.scope = scope
         self.expires_in = expires_in
@@ -52,15 +70,26 @@ class OAuthToken:
 
     @property
     def expires_at(self) -> int:
+        """
+        Gives the time when the token will expire as seconds since epoch
+        """
         return self._expires_at
 
     @property
     def is_expired(self) -> bool:
+        """
+        Checks if this token has expired
+        """
         now = int(time.time())
         return self.expires_at - now < 60
 
     @staticmethod
     def from_json(json: JsonDict):
+        """
+        Creates a new oauth token from a deserialized json
+
+        :param json: Deserialized json (dict) representing the token
+        """
         scopes = json['scope'].split()
         return OAuthToken(
             json['access_token'],
@@ -78,7 +107,12 @@ class OAuthToken:
 
 class ClientCredentials:
     """
-    Represents the necessary credentials to authenticate into a OAuth protected endpoint
+    Represents the necessary credentials to authenticate into a OAuth protected
+    endpoint
+
+    static methods:
+    -------
+    from_env_variables(): instantiates the class from environment variables
     """
     client_id: str
     client_secret: str
@@ -93,15 +127,18 @@ class ClientCredentials:
             redirect_uri: str = None,
             state: str = None,
             scope: List[str] = None,
-        ):
+    ):
         """
-            client_id and client_secret are necessary for both authentication flows, so they are required.
-            The redirect_uri is required for the authorization code flow, but not for client credentials.
+            client_id and client_secret are necessary for both authentication
+            flows, so they are required. The redirect_uri is required for the
+            authorization code flow, but not for client credentials.
 
             :param client_id: The Spotify OAuth client ID
             :param client_secret: The Spotify OAuth client secret
-            :param redirect_uri: The client URI which the authentication server will redirect the user
-            :param state: optional random string that helps with avoiding attacks on the redirect_uri
+            :param redirect_uri: The client URI which the authentication server
+                will redirect the user
+            :param state: optional random string that helps avoiding
+                attacks on the redirect_uri
             :param scope: The Spotify scopes needed for the wanted request
         """
         self.client_id = client_id
@@ -118,12 +155,26 @@ class ClientCredentials:
             client_id: Optional[str] = None,
             client_secret: Optional[str] = None,
             redirect_uri: Optional[str] = None
-        ):
+    ):
+        """
+        Instanties the client credentials from the environment variables.
+        Gives flexibility so only part of the credentials be loaded from
+        environment variables
+
+        The redirect_uri is not obligatory, so if it's not set, it'll not
+        throw an exception.
+
+        :param client_id: if passed, will substitute the client id from env
+        :param client_secret: if passed will substitute environment variable
+        :param redirect_uri: if passed will substitute the redirect uri
+            from env
+        """
         try:
             client_id = client_id or os.environ['SPTFY_CLIENT_ID']
             client_secret = client_secret or os.environ['SPTFY_CLIENT_SECRET']
-        except KeyError as e:
-            raise SptfyOAuthError(f"Environment variable is not properly configured: {e}")
+        except KeyError as err:
+            raise SptfyOAuthError(
+                f"Environment variable is not properly configured: {err}")
 
         # The redirect URI is not obligatory for the client_credentials flow
         # but should be specified if the client is intended to be used with
@@ -134,23 +185,28 @@ class ClientCredentials:
 
     def _authorization_header(self) -> Dict[str, str]:
         """
-        Generates the authentication header with base64 encoded client credentials
-        as specified in the spotify documentation for authorization flows.
+        Generates the authentication header with base64 encoded client
+        credentials as specified in the spotify documentation for
+        authorization flows.
         """
         encoded = '{}:{}'.format(self.client_id, self.client_secret).encode('ascii')
         base64_code = base64.b64encode(encoded)
- 
+
         return {'Authorization': f"Basic {base64_code.decode('ascii')}"}
 
 
 
 class ClientCredentialsFlow:
     """
-        Manages getting an access token using the Spotify API client credentials flow.
-        This flow is used when the client is not representing an user and it wants to
-        download data that is public available.
+        Manages getting an access token using the Spotify API client
+        credentials flow. This flow is used when the client is not
+        representing an user and it wants to download data that is
+        public available.
 
         This manager will take care of refreshing the token when needed.
+
+        methods:
+        get_access_token(): returns an [OAuthToken] for the client
     """
     credentials: ClientCredentials
     _session: Session
@@ -160,7 +216,7 @@ class ClientCredentialsFlow:
             self,
             credentials: Optional[ClientCredentials] = None,
             session: Optional[Session] = None
-        ):
+    ):
 
         if credentials:
             self.credentials = credentials
@@ -178,7 +234,10 @@ class ClientCredentialsFlow:
         """
         payload = {'grant_type': 'client_credentials'}
         auth_header = self.credentials._authorization_header()
-        headers = {'Content-Type': 'application/x-www-form-urlencoded', **auth_header}
+        headers = {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            **auth_header,
+        }
 
         response = self._session.post(
             OAUTH_TOKEN_ENDPOINT,
@@ -193,8 +252,8 @@ class ClientCredentialsFlow:
 
     def get_access_token(self) -> OAuthToken:
         """
-            Gets the access token from memory or from the API, in case it's expired.
-            This token cannot access endpoints for user data.
+            Gets the access token from memory or from the API, in case it's
+            expired. This token cannot access endpoints for user data.
 
             :return: An OAuth token for the client
         """
