@@ -2,6 +2,9 @@
 # Compilation
 __pycache__/
 
+# Type checker
+.mypy_cache/
+
 # Distribution / Packaging
 *.egg-info/
 *.egg

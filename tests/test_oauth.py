@@ -1,5 +1,7 @@
 import base64
 import json
+import time
+
 import pytest
 import requests
 import responses
@@ -64,14 +66,16 @@ def test_load_credentials_without_env_should_throw():
     # GIVEN: No environment variables
     # WHEN: Initialized with from_env_variables()
     # THEN: It should raise an exception
-    with pytest.raises(KeyError):
+    with pytest.raises(oauth.SptfyOAuthError) as err:
         oauth.ClientCredentials.from_env_variables()
+
+    assert "SPTFY_CLIENT_ID" in str(err) or "SPTFY_CLIENT_SECRET" in str(err)
 
 
 @pytest.mark.parametrize("test_input,defaults", CRED_INIT_VARS)
 def test_credentials_initialization(test_input, defaults):
 
-    # WHEN: Initialized with custom variables 
+    # WHEN: Initialized with custom variables
     credentials = oauth.ClientCredentials(**test_input)
 
     # THEN: Credentials should be initialized with default values
@@ -124,6 +128,47 @@ def test_oauth_token_from_json():
     assert oauth_token.refresh_token == None
 
 
+@patch('sptfy.oauth.time.time')
+def test_oauth_token_expires_at(mock_time):
+    # GIVEN: an expiration timespan from the token
+    token = {
+        'access_token':  'random-string-from-server',
+        'scope': 'foo bar',
+        'expires_in': 3600,
+        'token_type': 'Bearer',
+    }
+
+    mock_time.return_value = 10 
+    oauth_token = oauth.OAuthToken.from_json(token)
+
+    # WHEN: expires_at is called 
+    # THEN: The expiration timestamp should be returned
+    assert oauth_token.expires_at == mock_time.return_value + token['expires_in']
+    oauth_token.expires_at
+    # the expiration timestamp should not be recalculated
+    assert mock_time.call_count == 1
+
+
+@patch('sptfy.oauth.time.time')
+def test_oauth_token_is_expired(mock_time):
+    # GIVEN: An expired token
+    mock_time.side_effect = [0, 30, 101]
+
+    json_token = {
+        'access_token':  'random-string-from-server',
+        'scope': 'foo bar',
+        'expires_in': 100,
+        'token_type': 'Bearer',
+    }
+
+    token = oauth.OAuthToken.from_json(json_token)
+
+    # THEN: token should not be expired after 30 milliseconds (i think, maybe seconds)
+    assert not token.is_expired
+    # token should be expired after 100 milliseconds
+    assert token.is_expired
+
+
 def test_oauth_client_credentials_flow_from_env(sptfy_environment):
     # GIVEN: Environment variables necessary for client credentials flow
     client_id, client_secret, redirect_uri = sptfy_environment
@@ -149,9 +194,9 @@ def test_oauth_client_credentials_request_token(sptfy_environment):
 
     some_token = {
         'access_token':  'random-string-from-server',
-        'client_id': client_id,
         'scope': 'foo bar',
         'expires_in': 3600,
+        'token_type': 'Bearer'
     }
 
     responses.add(
@@ -165,11 +210,11 @@ def test_oauth_client_credentials_request_token(sptfy_environment):
     token = credentials_flow._request_access_token()
 
     # THEN: The response should be the token string
-    assert token == some_token
+    assert token == oauth.OAuthToken.from_json(some_token)
     token_request = responses.calls[0].request
     # the header variables contains the Authentication header
     assert token_request.headers['Authorization'] == auth_header['Authorization']
-    # The payload should indentify the grant_type
+    # The payload should identify the grant_type
     assert token_request.body == 'grant_type=client_credentials'
 
 
@@ -192,3 +237,105 @@ def test_oauth_client_credentials_request_token_should_raise_if_not_200(sptfy_en
     # THEN: it should raise an exception
     with pytest.raises(oauth.SptfyOAuthError):
         credentials_flow._request_access_token()
+
+
+@responses.activate
+def test_oauth_client_credentials_successful_get_access_token(sptfy_environment):
+    # GIVEN: ClientCredentialsFlow initialized with the client credentials
+    credentials_flow = oauth.ClientCredentialsFlow()
+
+    some_token = {
+        'access_token':  'random-string-from-server',
+        'scope': 'foo bar',
+        'expires_in': 3600,
+        'token_type': 'Bearer'
+    }
+
+    responses.add(
+        responses.POST,
+        oauth.OAUTH_TOKEN_ENDPOINT,
+        json=some_token,
+        status=200
+    )
+
+    # WHEN: get_access_token is called
+    token = credentials_flow.get_access_token()
+
+    # THEN: It should return the token from either the API or memory
+    assert token == oauth.OAuthToken.from_json(some_token)
+    # The token should be saved in the manager memory,
+    # so it's able to refresh when needed
+    assert credentials_flow._current_token == token
+
+
+unmocked = time.time
+def time_initial_values(values=None):
+    if values is None:
+        values = []
+    iter_val = iter(values)
+
+    def time_side_effect():
+        try:
+            return next(iter_val)
+        except StopIteration:
+            return unmocked() 
+    return time_side_effect
+
+
+@responses.activate
+@patch('sptfy.oauth.time.time')
+def test_oauth_client_credentials_get_access_token_with_expired(mock_time, sptfy_environment):
+    # GIVEN: some expired OAuth token
+    mock_time.side_effect = time_initial_values([0, 90])
+    expired_token = oauth.OAuthToken(
+        access_token='its-expired',
+        scope='foo bar',
+        expires_in=100,
+        token_type='Bearer'
+    )
+
+    some_token = {
+        'access_token':  'random-string-from-server',
+        'scope': 'foo bar',
+        'expires_in': 3600,
+        'token_type': 'Bearer'
+    }
+
+    responses.add(
+        responses.POST,
+        oauth.OAUTH_TOKEN_ENDPOINT,
+        json=some_token,
+        status=200
+    )
+
+    credentials_flow = oauth.ClientCredentialsFlow()
+    credentials_flow._current_token = expired_token
+
+    # WHEN: get_access_token is called
+    token = credentials_flow.get_access_token()
+
+    # THEN: the flow manager should replace the expired token
+    assert credentials_flow._current_token == oauth.OAuthToken.from_json(some_token)
+    # The returned token should be the new one instead of the expired
+    assert token == oauth.OAuthToken.from_json(some_token)
+
+
+@patch('sptfy.oauth.time.time')
+def test_oauth_client_credentials_should_return_from_memory_if_not_expired(mock_time, sptfy_environment):
+    # GIVEN: An OAuth token that has not expired
+    mock_time.return_value = 0
+    some_token = {
+        'access_token':  'random-string-from-server',
+        'scope': 'foo bar',
+        'expires_in': 3600,
+        'token_type': 'Bearer'
+    }
+
+    credentials_flow = oauth.ClientCredentialsFlow()
+    credentials_flow._current_token = oauth.OAuthToken.from_json(some_token)
+
+    # WHEN: get_access_token is called with a non expired token
+    token = credentials_flow.get_access_token()
+
+    # THEN: the token returned should come from memory
+    assert token == oauth.OAuthToken.from_json(some_token)
