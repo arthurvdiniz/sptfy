@@ -6,6 +6,7 @@
     flows.
 """
 import os
+import json
 import time
 import base64
 from typing import Optional, List, Dict
@@ -98,6 +99,21 @@ class OAuthToken:
             json['token_type'],
             json.get('refresh_token')
         )
+
+    def to_dict(self):
+        """
+        Creates a dictionary representation of the token
+        """
+        token = {
+            'access_token': self.access_token,
+            'scope': ' '.join(self.scope),
+            'token_type': self.token_type,
+            'expires_in': self.expires_in,
+            'expires_at': self.expires_at,
+        }
+        if self.refresh_token:
+            token['refresh_token'] = self.refresh_token
+        return token
 
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, OAuthToken):
@@ -194,6 +210,21 @@ class ClientCredentials:
 
         return {'Authorization': f"Basic {base64_code.decode('ascii')}"}
 
+
+
+class FileCache:
+    def __init__(self, file_path: str):
+        self.path = file_path
+
+    def save_token(self, token: OAuthToken):
+        with open(self.path, 'a') as cache:
+            text = json.dumps(token.to_dict())
+            cache.write(text)
+
+    def load_token(self) -> OAuthToken:
+        with open(self.path) as cache:
+            token = json.loads(cache.read())
+            return OAuthToken.from_json(token)
 
 
 class ClientCredentialsFlow:

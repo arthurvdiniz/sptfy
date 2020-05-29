@@ -65,7 +65,7 @@ def test_oauth_token_is_expired(mock_time):
 
     token = oauth.OAuthToken.from_json(json_token)
 
-    # THEN: token should not be expired after 30 milliseconds (i think, maybe seconds)
+    # THEN: token should not be expired after 30 seconds
     assert not token.is_expired
-    # token should be expired after 100 milliseconds
+    # token should be expired after 100 seconds
     assert token.is_expired
