@@ -10,7 +10,7 @@ import json
 import time
 import base64
 from typing import Optional, List, Dict
-from requests import Session
+from requests import Session, HTTPError
 
 from sptfy.types import JsonDict
 
@@ -222,9 +222,12 @@ class FileCache:
             cache.write(text)
 
     def load_token(self) -> OAuthToken:
-        with open(self.path) as cache:
-            token = json.loads(cache.read())
-            return OAuthToken.from_json(token)
+        try:
+            with open(self.path) as cache:
+                token = json.loads(cache.read())
+                return OAuthToken.from_json(token)
+        except FileNotFoundError:
+            return None
 
 
 class ClientCredentialsFlow:
@@ -295,3 +298,39 @@ class ClientCredentialsFlow:
         token = self._request_access_token()
         self._current_token = token
         return token
+
+
+class AuthorizationCodeFlow:
+    def __init__(self, credentials):
+        self.credentials = credentials
+
+        self._session = Session()
+
+    def _refresh_token(self, old_token: OAuthToken) -> OAuthToken:
+        auth_header = self.credentials._authorization_header()
+        headers = {
+            'Content-Type': 'application/x-www-url-formencoded',
+            **auth_header
+        }
+
+        payload = {
+            'refresh_token': old_token.refresh_token,
+            'grant_type': 'refresh_token',
+        }
+
+        response = self._session.post(
+            OAUTH_TOKEN_ENDPOINT,
+            headers=headers,
+            data=payload
+        )
+
+        try:
+            response.raise_for_status()
+        except HTTPError:
+            raise SptfyOAuthError(
+                (f"Couldn't refresh token."
+                 f"code: {response.status_code} reason: {response.reason}"))
+
+        json_response = response.json()
+        json_response['refresh_token'] = old_token.refresh_token
+        return OAuthToken.from_json(json_response)
