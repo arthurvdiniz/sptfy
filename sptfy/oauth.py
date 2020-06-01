@@ -426,8 +426,6 @@ class AuthorizationCodeFlow:
             'grant_type': 'authorization_code'
         }
 
-        print(payload)
-
         response = self._session.post(
             OAUTH_TOKEN_ENDPOINT,
             data=payload,
