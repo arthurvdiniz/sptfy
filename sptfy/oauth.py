@@ -8,7 +8,9 @@
 import os
 import json
 import time
+import webbrowser
 import base64
+from urllib.parse import urlencode
 from typing import Optional, List, Dict
 from requests import Session, HTTPError
 
@@ -16,6 +18,12 @@ from sptfy.types import JsonDict
 
 
 OAUTH_TOKEN_ENDPOINT = 'https://accounts.spotify.com/api/token'
+OAUTH_AUTHORIZATION_ENDPOINT = 'https://accounts.spotify.com/authorize'
+
+
+def _is_subset(small_scope: List[str], big_scope: List[str]) -> bool:
+    small_set, big_set = set(small_scope), set(big_scope)
+    return small_set <= big_set
 
 
 class SptfyOAuthError(Exception):
@@ -211,6 +219,13 @@ class ClientCredentials:
         return {'Authorization': f"Basic {base64_code.decode('ascii')}"}
 
 
+class StubCache:
+    def save_token(self, token: OAuthToken):
+        pass
+
+    def load_token(self) -> Optional[OAuthToken]:
+        return None
+
 
 class FileCache:
     def __init__(self, file_path: str):
@@ -221,13 +236,37 @@ class FileCache:
             text = json.dumps(token.to_dict())
             cache.write(text)
 
-    def load_token(self) -> OAuthToken:
+    def load_token(self) -> Optional[OAuthToken]:
         try:
             with open(self.path) as cache:
                 token = json.loads(cache.read())
                 return OAuthToken.from_json(token)
         except FileNotFoundError:
             return None
+
+
+class TerminalPromptAuth:
+    def authorize(self, credentials: ClientCredentials):
+        auth_url = self.build_url(credentials)
+        try:
+            webbrowser.open(auth_url)
+        except webbrowser.Error:
+            print(f'Please open the following url: {auth_url}')
+
+    def on_authorization_response(self):
+        response = input('Please insert the code you were given: ')
+        return response
+
+    def build_url(self, credentials: ClientCredentials) -> str:
+        query = {
+            'client_id': credentials.client_id,
+            'response_type': 'code',
+            'redirect_uri': credentials.redirect_uri,
+            'scope': ' '.join(credentials.scope)
+        }
+
+        params = urlencode(query)
+        return f'{OAUTH_AUTHORIZATION_ENDPOINT}?{params}'
 
 
 class ClientCredentialsFlow:
@@ -301,15 +340,50 @@ class ClientCredentialsFlow:
 
 
 class AuthorizationCodeFlow:
-    def __init__(self, credentials):
+    def __init__(self, credentials, token_cache=None, auth_strategy=None):
         self.credentials = credentials
-
         self._session = Session()
+        self._current_token = None
+
+        if auth_strategy:
+            self.auth_strategy = auth_strategy
+        else:
+            self.auth_strategy = TerminalPromptAuth()
+
+        if token_cache:
+            self.token_cache = token_cache
+        else:
+            self.token_cache = StubCache()
+
+    def get_access_token(self) -> OAuthToken:
+        token = self._current_token
+
+        # if token is not in memory, load from cache
+        if not token:
+            cached_token = self.token_cache.load_token()
+            if self._validate_token(cached_token):
+                token = cached_token
+
+        # If token is not in cache or memory, fetch from api
+        is_new_token = False
+        if not token:
+            is_new_token = True
+            token = self._request_access_token()
+
+        if token.is_expired:
+            is_new_token = True
+            token = self._refresh_token(token)
+
+        if is_new_token:
+            self.token_cache.save_token(token)
+
+        self._current_token = token
+        return token
 
     def _refresh_token(self, old_token: OAuthToken) -> OAuthToken:
         auth_header = self.credentials._authorization_header()
         headers = {
-            'Content-Type': 'application/x-www-url-formencoded',
+            'Content-Type': 'application/x-www-form-urlencoded',
             **auth_header
         }
 
@@ -324,9 +398,7 @@ class AuthorizationCodeFlow:
             data=payload
         )
 
-        try:
-            response.raise_for_status()
-        except HTTPError:
+        if not response.ok:
             raise SptfyOAuthError(
                 (f"Couldn't refresh token."
                  f"code: {response.status_code} reason: {response.reason}"))
@@ -334,3 +406,48 @@ class AuthorizationCodeFlow:
         json_response = response.json()
         json_response['refresh_token'] = old_token.refresh_token
         return OAuthToken.from_json(json_response)
+
+    def _request_access_token(self) -> OAuthToken:
+        # Authorization strategy is user defined
+        # (could be terminal prompt, http server)
+        self.auth_strategy.authorize(self.credentials)
+        code = self.auth_strategy.on_authorization_response()
+
+        auth_header = self.credentials._authorization_header()
+        headers = {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            **auth_header,
+        }
+
+        payload = {
+            'redirect_uri': self.credentials.redirect_uri,
+            'scope': ' '.join(self.credentials.scope),
+            'code': code,
+            'grant_type': 'authorization_code'
+        }
+
+        print(payload)
+
+        response = self._session.post(
+            OAUTH_TOKEN_ENDPOINT,
+            data=payload,
+            headers=headers,
+        )
+
+        if response.status_code != 200:
+            error_response = response.json()
+            raise SptfyOAuthError(
+                (f"error: {error_response['error']}"
+                 f"description: {error_response['error_description']}"),
+                error=error_response['error'],
+                error_description=error_response['error_response']
+            )
+
+        # TODO: check if scope is returned by server
+        return OAuthToken.from_json(response.json())
+
+    def _validate_token(self, token: Optional[OAuthToken]) -> bool:
+        if token is None:
+            return False
+    
+        return _is_subset(self.credentials.scope, token.scope)
