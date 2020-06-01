@@ -10,8 +10,10 @@ import json
 import time
 import webbrowser
 import base64
+import secrets
 from urllib.parse import urlencode
 from typing import Optional, List, Dict
+
 from requests import Session, HTTPError
 
 from sptfy.types import JsonDict
@@ -151,7 +153,7 @@ class ClientCredentials:
             redirect_uri: str = None,
             state: str = None,
             scope: List[str] = None,
-    ):
+    ) -> None:
         """
             client_id and client_secret are necessary for both authentication
             flows, so they are required. The redirect_uri is required for the
@@ -220,7 +222,7 @@ class ClientCredentials:
 
 
 class StubCache:
-    def save_token(self, token: OAuthToken):
+    def save_token(self, token: OAuthToken) -> None:
         pass
 
     def load_token(self) -> Optional[OAuthToken]:
@@ -231,7 +233,7 @@ class FileCache:
     def __init__(self, file_path: str):
         self.path = file_path
 
-    def save_token(self, token: OAuthToken):
+    def save_token(self, token: OAuthToken) -> None:
         with open(self.path, 'a') as cache:
             text = json.dumps(token.to_dict())
             cache.write(text)
@@ -245,7 +247,22 @@ class FileCache:
             return None
 
 
-class TerminalPromptAuth:
+class AuthStrategy:
+    """
+    Mixin which generates a random string for OAuth validation.
+    Avoids Cross-Site Request Forgery attacks.
+    Not used yet.
+    """
+    def get_state(self) -> str:
+        state = secrets.token_urlsafe(32)
+        self.current_state = state
+        return state
+
+    def check_state(self, state: str) -> bool:
+        return self.current_state == state
+
+
+class TerminalPrompt:
     def authorize(self, credentials: ClientCredentials):
         auth_url = self.build_url(credentials)
         try:
