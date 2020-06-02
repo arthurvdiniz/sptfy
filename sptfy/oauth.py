@@ -262,7 +262,7 @@ class AuthStrategy:
         return self.current_state == state
 
 
-class TerminalPrompt:
+class TerminalPromptAuth:
     def authorize(self, credentials: ClientCredentials):
         auth_url = self.build_url(credentials)
         try:
