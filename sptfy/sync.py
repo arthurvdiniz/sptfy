@@ -1,7 +1,7 @@
 import os
 import copy
 from urllib.parse import urlencode, quote
-from typing import TypeVar, Dict, Callable, Optional, Union, List, Any, overload
+from typing import Dict, Callable, Optional, Union, List, Any, overload
 
 import requests
 
@@ -9,16 +9,14 @@ import sptfy.oauth as oauth
 from sptfy.types import JsonDict
 
 
-T = TypeVar('T', covariant=True, bound='Any')
+# Gave up on type hints
 
 
-TRANSFORMER_CACHE: Dict[str, Callable[[JsonDict], T]] = {}
+TRANSFORMER_CACHE = {}
 
 
 def transform(endpoint: str):
-    def decorator_stub(
-        func: Callable[[JsonDict], T]
-    ) -> Callable[[JsonDict], T]:
+    def decorator_stub(func):
         TRANSFORMER_CACHE[endpoint] = func
         return func
     return decorator_stub
@@ -32,7 +30,6 @@ def get_music_names(json: JsonDict) -> List[str]:
 # Registered transform example:
 # Registering the transform function will automatically
 # run it when the function it transforms is called.
-# This works but completely destroys type safety
 @transform('tracks.search')
 def get_music_ids(json: JsonDict) -> List[str]:
     return [item['id'] for item in json['tracks']['items']]
@@ -68,22 +65,6 @@ class TracksEndpoint:
             raise Exception(f'Error downloading tracks: {response.reason}')
 
         return response.json()
-
-    # this helps the type checker only
-    @overload
-    def search(
-            self: 'TracksEndpoint',
-            search_term: str,
-            transform: Callable[[JsonDict], T]
-    ) -> T:
-        pass
-
-    @overload
-    def search(
-        self: 'TracksEndpoint',
-        search_term: str,
-    ) -> JsonDict:
-        pass
 
     def search(self, search_term, transform=None):
         top_url = os.path.dirname(self.BASE_URL)
@@ -127,9 +108,11 @@ class Spotify:
             credentials = oauth.ClientCredentials.from_env_variables()
             self.oauth_manager = oauth.AuthorizationCodeFlow(credentials)
 
+        self._tracks = TracksEndpoint(self.oauth_manager)
+
     @property
     def tracks(self) -> TracksEndpoint:
-        return TracksEndpoint(self.oauth_manager)
+        return self._tracks
 
 
 if __name__ == '__main__':
