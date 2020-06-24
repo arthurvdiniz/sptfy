@@ -222,7 +222,11 @@ class ClientCredentials:
 
 
 class StubCache:
-    def save_token(self, token: OAuthToken) -> None:
+    """
+        Implements the interface necessary for a token cache but does nothing.
+        It's used by default.
+    """
+    def save_token(self, token: OAuthToken):
         pass
 
     def load_token(self) -> Optional[OAuthToken]:
@@ -230,7 +234,13 @@ class StubCache:
 
 
 class FileCache:
+    """
+        Implements a file based token cache, saving the token as json.
+    """
     def __init__(self, file_path: str):
+        """
+        :param file_path: The path where the token should be persisted.
+        """
         self.path = file_path
 
     def save_token(self, token: OAuthToken) -> None:
@@ -263,6 +273,12 @@ class AuthStrategy:
 
 
 class TerminalPromptAuth:
+    """
+        Implements an authentication flow that is appropriated for
+        terminal based connections. It uses the webbrowser module
+        from the standard library to open a browser window for
+        user interaction.
+    """
     def authorize(self, credentials: ClientCredentials):
         auth_url = self.build_url(credentials)
         try:
@@ -275,6 +291,10 @@ class TerminalPromptAuth:
         return response
 
     def build_url(self, credentials: ClientCredentials) -> str:
+        """
+            Creates the authorization url with the right query
+            string for the client.
+        """
         query = {
             'client_id': credentials.client_id,
             'response_type': 'code',
@@ -296,6 +316,7 @@ class ClientCredentialsFlow:
         This manager will take care of refreshing the token when needed.
 
         methods:
+        -------
         get_access_token(): returns an [OAuthToken] for the client
     """
     credentials: ClientCredentials
@@ -357,7 +378,42 @@ class ClientCredentialsFlow:
 
 
 class AuthorizationCodeFlow:
+    """
+        Manages getting an OAuth access token from the spotify WEB API using
+        the authorization code flow. This flow is necessary to access user
+        private data as it allows them to authenticate the application.
+
+        This class will manage refreshing the token when necessary and saving
+        it to cache, in case it's specified.
+
+        methods:
+        -------
+        get_access_token() -> returns an OAuthToken for the user
+    """
     def __init__(self, credentials, token_cache=None, auth_strategy=None):
+        """
+        The token cache is an object implementing two methods:
+        save_token(OAuthToken) and load_token(), allowing to persist the token
+        in memory in case it's necessary. In case no cache is given, the token
+        is not persisted.
+
+        The auth_strategy is an object implementing
+        authorize(ClientCredentials) and on_authorization_response() that
+        allows the client to redirect the user to the authentication endpoint
+        in different ways (e.g. opening a web browser window or using HTTP
+        redirection).
+
+        In case the auth_strategy is not specified
+
+        The token cache API might change in the future.
+        The auth strategy might change to be a single method instead.
+
+        :param credentials: Instance of ClientCredentials with a specified
+        redirect_uri
+        :param token_cache: object implementing save_token and load_token
+        :param auth_strategy: object implementing authorize and
+        on_authorization_response
+        """
         self.credentials = credentials
         self._session = Session()
         self._current_token = None
@@ -373,6 +429,20 @@ class AuthorizationCodeFlow:
             self.token_cache = StubCache()
 
     def get_access_token(self) -> OAuthToken:
+        """
+        Gets the access token while redirecting the user to authenticate
+        the client application. The way of authentication is defined by
+        the auth_strategy passed in the constructor.
+
+        This method handles refreshing the token when it's expired.
+
+        The token might be cached in case a token cache is given, but by
+        default it's not. The token cache is an object that implements
+        two methods: save_token(OAuthToken) and load_token().
+
+        :raises SptfyOAuthError: when it's not able to retrieve an
+        access_token, either by user interaction or by refresh_token
+        """
         token = self._current_token
 
         # if token is not in memory, load from cache
@@ -398,6 +468,13 @@ class AuthorizationCodeFlow:
         return token
 
     def _refresh_token(self, old_token: OAuthToken) -> OAuthToken:
+        """
+            Gets a new access_token from the token endpoint using the
+            refresh_token.
+
+            :raises SptfyOAuthError: In case it's not able to refresh
+            the current token.
+        """
         auth_header = self.credentials._authorization_header()
         headers = {
             'Content-Type': 'application/x-www-form-urlencoded',
@@ -425,6 +502,14 @@ class AuthorizationCodeFlow:
         return OAuthToken.from_json(json_response)
 
     def _request_access_token(self) -> OAuthToken:
+        """
+            Gets an access_token from the authorize endpoint which requires
+            user interaction. The way the interaction is handled is defined by
+            the auth_strategy.
+
+            :raises SptfyOAuthError: when it's not able to retrieve an
+            access_token
+        """
         # Authorization strategy is user defined
         # (could be terminal prompt, http server)
         self.auth_strategy.authorize(self.credentials)
@@ -455,14 +540,18 @@ class AuthorizationCodeFlow:
                 (f"error: {error_response['error']}"
                  f"description: {error_response['error_description']}"),
                 error=error_response['error'],
-                error_description=error_response['error_response']
+                error_description=error_response['error_description']
             )
 
         # TODO: check if scope is returned by server
         return OAuthToken.from_json(response.json())
 
     def _validate_token(self, token: Optional[OAuthToken]) -> bool:
+        """
+            Validates if a saved token has the correct scopes so it
+            cant be tampered with.
+        """
         if token is None:
             return False
-    
+
         return _is_subset(self.credentials.scope, token.scope)
