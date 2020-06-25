@@ -10,8 +10,9 @@ import json
 import time
 import webbrowser
 import base64
+from enum import Enum
 from urllib.parse import urlencode
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict, Union
 from requests import Session, HTTPError
 
 from sptfy.types import JsonDict
@@ -28,6 +29,35 @@ def _is_subset(small_scope: List[str], big_scope: List[str]) -> bool:
 
 class SptfyOAuthError(Exception):
     pass
+
+
+# Enum are frowned upon in python because they dont give any type safety
+# guarantees. But I still decided to used them because they help with
+# linters and tab completion in IDEs, the REPL and jupyter notebooks.
+class Scope(Enum):
+    """
+        Implements the OAuth scopes that gives permission
+        so clients from the Spotify Web API can access specific
+        functionalities.
+    """
+    UGC_IMAGE_UPLOAD = 'ugc-image-upload'
+    USER_FOLLOW_READ = 'user-follow-read'
+    USER_FOLLOW_MODIFY = 'user-follow-modify'
+    USER_READ_RECENTLY_PLAYED = 'user-read-recently-played'
+    USER_TOP_READ = 'user-top-read'
+    USER_READ_PLAYBACK_POSITION = 'user-read-playback-position'
+    USER_LIBRARY_READ = 'user-library-read'
+    USER_LIBRARY_MODIFY = 'user-library-modify'
+    USER_READ_PLAYBACK_STATE = 'user-read-playback-state'
+    USER_READ_CURRENTLY_PLAYING = 'user-read-currently-playing'
+    USER_MODIFY_PLAYBACK_STATE = 'user-modify-playback-state'
+    PLAYLIST_READ_COLLABORATIVE = 'playlist-read-collaborative'
+    PLAYLIST_MODIFY_PRIVATE = 'playlist-modify-private'
+    PLAYLIST_MODIFY_PUBLIC = 'playlist-read-private'
+    STREAMING = 'streaming'
+    APP_REMOTE_CONTROL = 'app-remote-control'
+    USER_READ_EMAIL = 'user-read-email'
+    USER_READ_PRIVATE = 'user-read-private'
 
 
 class OAuthToken:
@@ -77,6 +107,33 @@ class OAuthToken:
 
         self._expires_at = int(time.time()) + self.expires_in
 
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, OAuthToken):
+            return False
+        return (self.access_token == other.access_token and
+                self.scope == other.scope and
+                self.token_type == other.token_type)
+
+    def __repr__(self):
+        return ("OAuthToken(\n"
+                f"   access_token={self.access_token},\n"
+                f"   scope={self.scope},\n"
+                f"   refresh_token={self.refresh_token},\n"
+                f"   token_type={self.token_type},\n"
+                f"   expires_in={self.expires_in}\n"
+                ")")
+
+    @property
+    def scope(self) -> List[str]:
+        return self._scope
+
+    @scope.setter
+    def scope(self, scopes: Union[List[str], List[Scope]]):
+        if scopes and isinstance(scopes[0], Scope):
+            self._scope = [scope.value for scope in scopes]
+        else:
+            self._scope = scopes
+
     @property
     def expires_at(self) -> int:
         """
@@ -123,12 +180,7 @@ class OAuthToken:
             token['refresh_token'] = self.refresh_token
         return token
 
-    def __eq__(self, other: object) -> bool:
-        if not isinstance(other, OAuthToken):
-            return False
-        return self.access_token == other.access_token and self.scope == other.scope and self.token_type == other.token_type
-
-
+    
 class ClientCredentials:
     """
     Represents the necessary credentials to authenticate into a OAuth protected
@@ -171,8 +223,30 @@ class ClientCredentials:
             self.redirect_uri = redirect_uri
         if scope:
             self.scope = scope
+        else:
+            self._scope = []
+
         if state:
             self.state = state
+
+    def __repr__(self):
+        return ("ClientCredentials(\n"
+                f"    client_id={self.client_id},\n"
+                f"    client_secret={self.client_secret},\n"
+                f"    redirect_uri={self.redirect_uri},\n"
+                f"    scope={self.scope}\n"
+                ")")
+
+    @property
+    def scope(self) -> List[str]:
+        return self._scope
+
+    @scope.setter
+    def scope(self, scopes: Union[List[str], List[Scope]]):
+        if scopes and isinstance(scopes[0], Scope):
+            self._scope = [scope.value for scope in scopes]
+        else:
+            self._scope = scopes
 
     @staticmethod
     def from_env_variables(
@@ -526,7 +600,6 @@ class AuthorizationCodeFlow:
                 error_description=error_response['error_description']
             )
 
-        # TODO: check if scope is returned by server
         return OAuthToken.from_json(response.json())
 
     def _validate_token(self, token: Optional[OAuthToken]) -> bool:

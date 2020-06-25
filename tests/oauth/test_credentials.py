@@ -77,6 +77,32 @@ def test_credentials_initialization_has_default_variables(sptfy_environment):
     assert credentials.state is None
 
 
+def test_credentials_should_read_scopes_enum(sptfy_environment):
+    # GIVEN: The credentials from program variables
+    client_id, client_secret, _ = sptfy_environment
+    # and the spotify scope as enums
+    scopes = [oauth.Scope.USER_LIBRARY_MODIFY, oauth.Scope.USER_LIBRARY_READ]
+
+    # WHEN: the scope is set
+    credentials = oauth.ClientCredentials(client_id, client_secret, scope=scopes)
+
+    # THEN: The scopes are defined as raw strings (instead of enums)
+    assert credentials.scope == [scope.value for scope in scopes]
+
+
+def test_credentials_scope_should_work_with_raw_strings(sptfy_environment):
+    # GIVEN: the credentials from program variables
+    client_id, client_secret, _ = sptfy_environment
+    # and the spotify scope as raw strings
+    scopes = ['user-library-modify', 'user-library-read']
+
+    # WHEN: the scope is given
+    credentials = oauth.ClientCredentials(client_id, client_secret, scope=scopes)
+
+    # THEN: The scope should be set as is
+    assert credentials.scope == scopes
+
+
 def test_credentials_get_auth_header(sptfy_environment):
     # GIVEN: A client id and a client_secret
     client_id, client_secret, _ = sptfy_environment
