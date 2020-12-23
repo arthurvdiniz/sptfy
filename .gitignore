@@ -8,3 +8,5 @@ __pycache__/
 # Distribution / Packaging
 *.egg-info/
 *.egg
+
+credentials.sh
