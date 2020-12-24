@@ -50,8 +50,7 @@ sptfy = Spotify()
 # Register a transfomer
 @sptfy.transformer('tracks.search')
 def get_track_result_names(api_response):
-    return [track['name'] for track in ]
-    return (api_response['name'], api_response['artists'][0]['name'])
+    return [track['name'] for track in api_response['tracks']['items']]
 
 # Receives a list of track names instead of json object
 track_names = sptfy.tracks.search('The Good Song')
