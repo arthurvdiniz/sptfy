@@ -74,3 +74,42 @@ track_items = sptfy.tracks.search('The Good Song', transformer=get_track_items)
 for track_item in track_items:
     print(track_item)
 ```
+
+### Configuration
+
+The library aims to be flexible enough to be used in various environments (i.e. flask, django, CLI), even though this is not the case at the moment.
+
+The default configuration does the authorization by opening a web browser so that the client is easily usable from a interactive python session.
+
+```Python
+import sptfy.oauth as oauth
+from sptfy.oauth import Scope
+
+# The default configuration uses:
+# OAuth flow: Authorization Code
+# Authorization: terminal prompt for the response code
+# Token Cache: None
+# Client Credentials: from environment variables
+sptfy = Spotify()
+
+# client credentials can be defined explicitly
+client_id = os.getenv('SPTFY_CLIENT_ID')
+client_secret = os.getenv('SPTFY_CLIENT_SECRET')
+scopes = [Scope.USER_LIBRARY_MODIFY, Scope.USER_LIBRARY_READ]
+# or
+scopes = ['user-library-modify', 'user-library-read']
+credentials = oauth.ClientCredentials(client_id, client_secret, scopes=scopes)
+
+# or can be obtained from the environment
+credentials = oauth.ClientCredentials.from_env_variables()
+
+# OAuth Managers
+oauth_manager = oauth.AuthorizationCodeFlow(credentials)
+# or
+oauth_manager = oauth.ClientCredentialsFlow(credentials)
+
+custom_sptfy = Spotify(oauth_manager)
+
+# Ideally the oauth managers would work with third party APIs in backend environments, 
+# but this is still in the design phase.
+```
