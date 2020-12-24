@@ -15,7 +15,9 @@ from urllib.parse import urlencode
 from typing import Optional, List, Dict, Union
 from requests import Session, HTTPError
 
+import sptfy.utils as utils
 from sptfy.types import JsonDict
+from sptfy.errors import SptfyOAuthError, SptfyOAuthRedirect
 
 
 OAUTH_TOKEN_ENDPOINT = 'https://accounts.spotify.com/api/token'
@@ -25,14 +27,6 @@ OAUTH_AUTHORIZATION_ENDPOINT = 'https://accounts.spotify.com/authorize'
 def _is_subset(small_scope: List[str], big_scope: List[str]) -> bool:
     small_set, big_set = set(small_scope), set(big_scope)
     return small_set <= big_set
-
-
-class SptfyOAuthError(Exception):
-    def __init__(self, message, error=None, error_description=None):
-        self.message = message
-        self.error = error
-        self.error_description = error_description
-        super().__init__(self.message)
 
 
 # Enum are frowned upon in python because they dont give any type safety
@@ -340,27 +334,75 @@ class TerminalPromptAuth:
         from the standard library to open a browser window for
         user interaction.
     """
-    def authorize(self, credentials: ClientCredentials):
-        auth_url = self.build_url(credentials)
+    def __init__(self, credentials: ClientCredentials, token_cache):
+        self.credentials = credentials
+        self.token_cache = token_cache
+
+    def authorize(self):
+        auth_url = self.build_url()
         try:
             webbrowser.open(auth_url)
         except webbrowser.Error:
             print(f'Please open the following url: {auth_url}')
 
-    def on_authorization_response(self):
-        response = input('Please insert the code you were given: ')
-        return response
+        authorization_code = input('Please insert the code you were given: ')
+        return self.retrieve_token(authorization_code)
 
-    def build_url(self, credentials: ClientCredentials) -> str:
+    # Define a retrieve_token method here
+    # It should get the token and save it to cache
+    def retrieve_token(self, authorization_code: str):
+        access_token = utils.retrieve_token(authorization_code, self.credentials)
+        self.token_cache.save_token(access_token)
+        return access_token
+
+
+    def build_url(self) -> str:
         """
             Creates the authorization url with the right query
             string for the client.
         """
         query = {
-            'client_id': credentials.client_id,
+            'client_id': self.credentials.client_id,
             'response_type': 'code',
-            'redirect_uri': credentials.redirect_uri,
-            'scope': ' '.join(credentials.scope)
+            'redirect_uri': self.credentials.redirect_uri,
+            'scope': ' '.join(self.credentials.scope)
+        }
+
+        params = urlencode(query)
+        return f'{OAUTH_AUTHORIZATION_ENDPOINT}?{params}'
+
+
+class WebBackendAuth:
+    """
+    Implements the authorizaiton flow for a web backend server.
+
+    The methods are aimed to be used in views.
+    """
+    def __init__(self, credentials: ClientCredentials, token_cache):
+        self.credentials = credentials
+        self.token_cache = token_cache
+
+    def authorize(self):
+        raise SptfyOAuthRedirect(
+            "No token available. User needs to authorize app.", 
+            redirect_url=self.build_url()
+        )
+
+    def retrieve_token(self, authorization_code: str):
+        token = utils.retrieve_token(authorization_code, self.credentials)
+        self.token_cache.save_token(token)
+        return token
+
+    def build_url(self) -> str:
+        """
+            Creates the authorization url with the right query
+            string for the client.
+        """
+        query = {
+            'client_id': self.credentials.client_id,
+            'response_type': 'code',
+            'redirect_uri': self.credentials.redirect_uri,
+            'scope': ' '.join(self.credentials.scope)
         }
 
         params = urlencode(query)
@@ -464,7 +506,8 @@ class AuthorizationCodeFlow:
         in different ways (e.g. opening a web browser window or using HTTP
         redirection).
 
-        In case the auth_strategy is not specified
+        In case the auth_strategy is not specified the authentication will
+        be done by opening a browser window.
 
         The token cache API might change in the future.
         The auth strategy might change to be a single method instead.
@@ -479,15 +522,16 @@ class AuthorizationCodeFlow:
         self._session = Session()
         self._current_token = None
 
-        if auth_strategy:
-            self.auth_strategy = auth_strategy
-        else:
-            self.auth_strategy = TerminalPromptAuth()
-
         if token_cache:
             self.token_cache = token_cache
         else:
             self.token_cache = StubCache()
+
+        if auth_strategy:
+            self.auth_strategy = auth_strategy
+        else:
+            self.auth_strategy = TerminalPromptAuth(self.credentials, self.token_cache)
+
 
     def get_access_token(self) -> OAuthToken:
         """
@@ -512,11 +556,12 @@ class AuthorizationCodeFlow:
             if self._validate_token(cached_token):
                 token = cached_token
 
-        # If token is not in cache or memory, fetch from api
+        # If token is not in cache or memory, the user
+        # needs to authorize the application
         is_new_token = False
         if not token:
             is_new_token = True
-            token = self._request_access_token()
+            token = self.auth_strategy.authorize()
 
         if token.is_expired:
             is_new_token = True
@@ -562,6 +607,7 @@ class AuthorizationCodeFlow:
         json_response['refresh_token'] = old_token.refresh_token
         return OAuthToken.from_json(json_response)
 
+    # TODO: This method will be handled by the auth_strategy
     def _request_access_token(self) -> OAuthToken:
         """
             Gets an access_token from the authorize endpoint which requires

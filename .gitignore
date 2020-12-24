@@ -9,4 +9,7 @@ __pycache__/
 *.egg-info/
 *.egg
 
+# Testing
+.coverage
+
 credentials.sh

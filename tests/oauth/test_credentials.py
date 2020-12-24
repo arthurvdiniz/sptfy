@@ -43,7 +43,7 @@ def test_load_credentials_from_env(sptfy_environment):
     assert credentials.redirect_uri == redirect_uri
 
 
-def test_load_credentials_without_env_should_throw():
+def test_load_credentials_without_env_should_throw(empty_environment):
     # GIVEN: No environment variables
     # WHEN: Initialized with from_env_variables()
     # THEN: It should raise an exception
