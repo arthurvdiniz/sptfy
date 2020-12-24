@@ -68,7 +68,7 @@ def test_spotify_tracks_get_should_accept_transform(sptfy_environment, token_fil
 
     # When: trying to retrieve a track with a specific transformer
     sptfy = Spotify(oauth_manager=oauth_manager)
-    response = sptfy.tracks.get(track_id=track_id, transform=retrieve_name)
+    response = sptfy.tracks.get(track_id=track_id, transformer=retrieve_name)
 
     # Then: the result should be the given by the transformer 
     # instead of the json

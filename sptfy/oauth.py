@@ -28,7 +28,11 @@ def _is_subset(small_scope: List[str], big_scope: List[str]) -> bool:
 
 
 class SptfyOAuthError(Exception):
-    pass
+    def __init__(self, message, error=None, error_description=None):
+        self.message = message
+        self.error = error
+        self.error_description = error_description
+        super().__init__(self.message)
 
 
 # Enum are frowned upon in python because they dont give any type safety

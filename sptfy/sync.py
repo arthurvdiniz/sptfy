@@ -2,6 +2,7 @@ import os
 import functools
 import typing as t
 from urllib.parse import urlencode, quote
+from contextlib import contextmanager
 
 import requests
 
@@ -17,11 +18,11 @@ def with_transformer(endpoint):
     """
     def apply_transform(method):
         @functools.wraps(method)
-        def call_endpoint_method(self, *args, transform=None, **kwargs):
+        def call_endpoint_method(self, *args, transformer=None, **kwargs):
             json_response = method(self, *args, **kwargs)
 
-            if transform:
-                return transform(json_response)
+            if transformer:
+                return transformer(json_response)
 
             cached_transform = self.transformer_cache.get(endpoint)
             if cached_transform:
@@ -30,6 +31,8 @@ def with_transformer(endpoint):
             return json_response
         return call_endpoint_method
     return apply_transform
+
+
 
 
 
@@ -42,7 +45,7 @@ class TracksEndpoint:
 
     def _auth_header(self) -> t.Dict[str, str]:
         token = self.oauth_manager.get_access_token()
-        return {'Authorizaiton': f'Bearer {token.access_token}'}
+        return {'Authorization': f'Bearer {token.access_token}'}
 
     @with_transformer('tracks.get')
     def get(self, track_id: str) -> JsonDict:
@@ -61,7 +64,7 @@ class TracksEndpoint:
         return response.json()
 
     @with_transformer('tracks.search')
-    def search(self, search_term, transform=None):
+    def search(self, search_term):
         top_url = os.path.dirname(self.BASE_URL)
         search_url = f"{top_url}/search"
 
@@ -73,7 +76,7 @@ class TracksEndpoint:
         params = urlencode(query)
         full_url = f'{search_url}?{params}'
         headers = self._auth_header()
-
+        
         response = requests.get(
             full_url,
             headers=headers
@@ -226,3 +229,23 @@ class Spotify:
                 return func(*args, **kwargs)
             return wrapper
         return add_transform_to_cache
+
+    @contextmanager
+    def disable_transformers(self):
+        """
+        A context manager that temporarily disables this 
+        Spotify client's transformers in case the user needs 
+        to retrieve more data than it's given by the transformer.
+
+        Usage
+        -------
+        with sptfy.disable_transformers():
+            sptfy.tracks.get('some-id')
+        """
+        try:
+            cached_transformers = dict(self.transformer_cache)
+            self.transformer_cache.clear() 
+            yield
+        finally:
+            self.transformer_cache.update(cached_transformers)
+
