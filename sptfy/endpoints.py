@@ -1,13 +1,10 @@
 import os
-
 import functools
 import typing as t
 from urllib.parse import urlencode, quote
-from contextlib import contextmanager
 
 import requests
 
-import sptfy.oauth as oauth
 from sptfy.types import JsonDict
 
 
@@ -62,7 +59,7 @@ class TracksEndpoint:
         return response.json()
 
     @with_transformer('tracks.search')
-    def search(self, search_term):
+    def search(self, search_term: str):
         top_url = os.path.dirname(self.BASE_URL)
         search_url = f"{top_url}/search"
 
@@ -189,61 +186,7 @@ class PlaylistEndpoint:
         pass
 
     @with_transformer('playlists.from_user')
-    def from_user(self, user_id: str):
+    def from_user(self , user_id: str):
         pass
 
-
-class Spotify:
-    """
-    Represents an user session to the Spotify Web API.
-
-    By default it uses the Authorization Code Flow, but it can 
-    be changed by using the [oauth_manager] argument.
-    """
-    BASE_URL = 'https://api.spotify.com/v1'
-
-    def __init__(self, oauth_manager=None):
-        if oauth_manager:
-            self.oauth_manager = oauth_manager
-        else:
-            credentials = oauth.ClientCredentials.from_env_variables()
-            self.oauth_manager = oauth.AuthorizationCodeFlow(credentials)
-
-        self.transformer_cache = {}
-
-        self.tracks = TracksEndpoint(self.oauth_manager, self.transformer_cache)
-        self.playlists = PlaylistEndpoint(self.oauth_manager, self.transformer_cache)
-
-    def transformer(self, endpoint: str):
-        """
-        Registers a transformer to this Spotify session.
-
-        Works similarly to Flask's @app.route() decorator.
-        """
-        def add_transform_to_cache(func):
-            self.transformer_cache[endpoint] = func
-            @functools.wraps(func)
-            def wrapper(*args, **kwargs):
-                return func(*args, **kwargs)
-            return wrapper
-        return add_transform_to_cache
-
-    @contextmanager
-    def disable_transformers(self):
-        """
-        A context manager that temporarily disables this 
-        Spotify client's transformers in case the user needs 
-        to retrieve more data than it's given by the transformer.
-
-        Usage
-        -------
-        with sptfy.disable_transformers():
-            sptfy.tracks.get('some-id')
-        """
-        try:
-            cached_transformers = dict(self.transformer_cache)
-            self.transformer_cache.clear() 
-            yield
-        finally:
-            self.transformer_cache.update(cached_transformers)
 

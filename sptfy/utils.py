@@ -1,4 +1,8 @@
+import functools
+import asyncio
+
 import requests
+
 import sptfy.oauth as oauth
 
 
@@ -35,3 +39,15 @@ def retrieve_token(
         )
 
     return oauth.OAuthToken.from_json(response.json())
+
+
+async def run_async(func, *args, **kwargs):
+    """
+    Offloads a synchronous function to a background thread.
+
+    Only works with IO bound tasks.
+    """
+    loop = asyncio.get_event_loop()
+    complete_func = functools.partial(func, *args, **kwargs)
+    return await loop.run_in_executor(None, complete_func)
+

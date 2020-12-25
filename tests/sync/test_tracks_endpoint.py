@@ -4,7 +4,7 @@ import pytest
 import responses
 
 import sptfy.oauth as oauth
-from sptfy.sync import Spotify
+from sptfy.clients import Spotify
 
 
 @pytest.fixture
