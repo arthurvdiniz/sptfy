@@ -14,3 +14,8 @@ def sptfy_environment(monkeypatch):
     return client_id, client_secret, redirect_uri
 
 
+@pytest.fixture
+def empty_environment(monkeypatch):
+    monkeypatch.delenv('SPTFY_CLIENT_ID', raising=False)
+    monkeypatch.delenv('SPTFY_CLIENT_SECRET', raising=False)
+    monkeypatch.delenv('SPTFY_REDIRECT_URI', raising=False)

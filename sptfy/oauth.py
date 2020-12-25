@@ -10,13 +10,15 @@ import json
 import time
 import webbrowser
 import base64
-import secrets
-from urllib.parse import urlencode
-from typing import Optional, List, Dict
 
+from enum import Enum
+from urllib.parse import urlencode
+from typing import Optional, List, Dict, Union
 from requests import Session, HTTPError
 
+import sptfy.utils as utils
 from sptfy.types import JsonDict
+from sptfy.errors import SptfyOAuthError, SptfyOAuthRedirect
 
 
 OAUTH_TOKEN_ENDPOINT = 'https://accounts.spotify.com/api/token'
@@ -28,8 +30,33 @@ def _is_subset(small_scope: List[str], big_scope: List[str]) -> bool:
     return small_set <= big_set
 
 
-class SptfyOAuthError(Exception):
-    pass
+# Enum are frowned upon in python because they dont give any type safety
+# guarantees. But I still decided to used them because they help with
+# linters and tab completion in IDEs, the REPL and jupyter notebooks.
+class Scope(Enum):
+    """
+        Implements the OAuth scopes that gives permission
+        so clients from the Spotify Web API can access specific
+        functionalities.
+    """
+    UGC_IMAGE_UPLOAD = 'ugc-image-upload'
+    USER_FOLLOW_READ = 'user-follow-read'
+    USER_FOLLOW_MODIFY = 'user-follow-modify'
+    USER_READ_RECENTLY_PLAYED = 'user-read-recently-played'
+    USER_TOP_READ = 'user-top-read'
+    USER_READ_PLAYBACK_POSITION = 'user-read-playback-position'
+    USER_LIBRARY_READ = 'user-library-read'
+    USER_LIBRARY_MODIFY = 'user-library-modify'
+    USER_READ_PLAYBACK_STATE = 'user-read-playback-state'
+    USER_READ_CURRENTLY_PLAYING = 'user-read-currently-playing'
+    USER_MODIFY_PLAYBACK_STATE = 'user-modify-playback-state'
+    PLAYLIST_READ_COLLABORATIVE = 'playlist-read-collaborative'
+    PLAYLIST_MODIFY_PRIVATE = 'playlist-modify-private'
+    PLAYLIST_MODIFY_PUBLIC = 'playlist-read-private'
+    STREAMING = 'streaming'
+    APP_REMOTE_CONTROL = 'app-remote-control'
+    USER_READ_EMAIL = 'user-read-email'
+    USER_READ_PRIVATE = 'user-read-private'
 
 
 class OAuthToken:
@@ -79,6 +106,33 @@ class OAuthToken:
 
         self._expires_at = int(time.time()) + self.expires_in
 
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, OAuthToken):
+            return False
+        return (self.access_token == other.access_token and
+                self.scope == other.scope and
+                self.token_type == other.token_type)
+
+    def __repr__(self):
+        return ("OAuthToken(\n"
+                f"   access_token={self.access_token},\n"
+                f"   scope={self.scope},\n"
+                f"   refresh_token={self.refresh_token},\n"
+                f"   token_type={self.token_type},\n"
+                f"   expires_in={self.expires_in}\n"
+                ")")
+
+    @property
+    def scope(self) -> List[str]:
+        return self._scope
+
+    @scope.setter
+    def scope(self, scopes: Union[List[str], List[Scope]]):
+        if scopes and isinstance(scopes[0], Scope):
+            self._scope = [scope.value for scope in scopes]
+        else:
+            self._scope = scopes
+
     @property
     def expires_at(self) -> int:
         """
@@ -125,12 +179,7 @@ class OAuthToken:
             token['refresh_token'] = self.refresh_token
         return token
 
-    def __eq__(self, other: object) -> bool:
-        if not isinstance(other, OAuthToken):
-            return False
-        return self.access_token == other.access_token and self.scope == other.scope and self.token_type == other.token_type
-
-
+    
 class ClientCredentials:
     """
     Represents the necessary credentials to authenticate into a OAuth protected
@@ -173,8 +222,30 @@ class ClientCredentials:
             self.redirect_uri = redirect_uri
         if scope:
             self.scope = scope
+        else:
+            self._scope = []
+
         if state:
             self.state = state
+
+    def __repr__(self):
+        return ("ClientCredentials(\n"
+                f"    client_id={self.client_id},\n"
+                f"    client_secret={self.client_secret},\n"
+                f"    redirect_uri={self.redirect_uri},\n"
+                f"    scope={self.scope}\n"
+                ")")
+
+    @property
+    def scope(self) -> List[str]:
+        return self._scope
+
+    @scope.setter
+    def scope(self, scopes: Union[List[str], List[Scope]]):
+        if scopes and isinstance(scopes[0], Scope):
+            self._scope = [scope.value for scope in scopes]
+        else:
+            self._scope = scopes
 
     @staticmethod
     def from_env_variables(
@@ -279,27 +350,75 @@ class TerminalPromptAuth:
         from the standard library to open a browser window for
         user interaction.
     """
-    def authorize(self, credentials: ClientCredentials):
-        auth_url = self.build_url(credentials)
+    def __init__(self, credentials: ClientCredentials, token_cache):
+        self.credentials = credentials
+        self.token_cache = token_cache
+
+    def authorize(self):
+        auth_url = self.build_url()
         try:
             webbrowser.open(auth_url)
         except webbrowser.Error:
             print(f'Please open the following url: {auth_url}')
 
-    def on_authorization_response(self):
-        response = input('Please insert the code you were given: ')
-        return response
+        authorization_code = input('Please insert the code you were given: ')
+        return self.retrieve_token(authorization_code)
 
-    def build_url(self, credentials: ClientCredentials) -> str:
+    # Define a retrieve_token method here
+    # It should get the token and save it to cache
+    def retrieve_token(self, authorization_code: str):
+        access_token = utils.retrieve_token(authorization_code, self.credentials)
+        self.token_cache.save_token(access_token)
+        return access_token
+
+
+    def build_url(self) -> str:
         """
             Creates the authorization url with the right query
             string for the client.
         """
         query = {
-            'client_id': credentials.client_id,
+            'client_id': self.credentials.client_id,
             'response_type': 'code',
-            'redirect_uri': credentials.redirect_uri,
-            'scope': ' '.join(credentials.scope)
+            'redirect_uri': self.credentials.redirect_uri,
+            'scope': ' '.join(self.credentials.scope)
+        }
+
+        params = urlencode(query)
+        return f'{OAUTH_AUTHORIZATION_ENDPOINT}?{params}'
+
+
+class WebBackendAuth:
+    """
+    Implements the authorizaiton flow for a web backend server.
+
+    The methods are aimed to be used in views.
+    """
+    def __init__(self, credentials: ClientCredentials, token_cache):
+        self.credentials = credentials
+        self.token_cache = token_cache
+
+    def authorize(self):
+        raise SptfyOAuthRedirect(
+            "No token available. User needs to authorize app.", 
+            redirect_url=self.build_url()
+        )
+
+    def retrieve_token(self, authorization_code: str):
+        token = utils.retrieve_token(authorization_code, self.credentials)
+        self.token_cache.save_token(token)
+        return token
+
+    def build_url(self) -> str:
+        """
+            Creates the authorization url with the right query
+            string for the client.
+        """
+        query = {
+            'client_id': self.credentials.client_id,
+            'response_type': 'code',
+            'redirect_uri': self.credentials.redirect_uri,
+            'scope': ' '.join(self.credentials.scope)
         }
 
         params = urlencode(query)
@@ -403,7 +522,8 @@ class AuthorizationCodeFlow:
         in different ways (e.g. opening a web browser window or using HTTP
         redirection).
 
-        In case the auth_strategy is not specified
+        In case the auth_strategy is not specified the authentication will
+        be done by opening a browser window.
 
         The token cache API might change in the future.
         The auth strategy might change to be a single method instead.
@@ -418,15 +538,16 @@ class AuthorizationCodeFlow:
         self._session = Session()
         self._current_token = None
 
-        if auth_strategy:
-            self.auth_strategy = auth_strategy
-        else:
-            self.auth_strategy = TerminalPromptAuth()
-
         if token_cache:
             self.token_cache = token_cache
         else:
             self.token_cache = StubCache()
+
+        if auth_strategy:
+            self.auth_strategy = auth_strategy
+        else:
+            self.auth_strategy = TerminalPromptAuth(self.credentials, self.token_cache)
+
 
     def get_access_token(self) -> OAuthToken:
         """
@@ -451,11 +572,12 @@ class AuthorizationCodeFlow:
             if self._validate_token(cached_token):
                 token = cached_token
 
-        # If token is not in cache or memory, fetch from api
+        # If token is not in cache or memory, the user
+        # needs to authorize the application
         is_new_token = False
         if not token:
             is_new_token = True
-            token = self._request_access_token()
+            token = self.auth_strategy.authorize()
 
         if token.is_expired:
             is_new_token = True
@@ -501,6 +623,7 @@ class AuthorizationCodeFlow:
         json_response['refresh_token'] = old_token.refresh_token
         return OAuthToken.from_json(json_response)
 
+    # TODO: This method will be handled by the auth_strategy
     def _request_access_token(self) -> OAuthToken:
         """
             Gets an access_token from the authorize endpoint which requires
@@ -543,7 +666,6 @@ class AuthorizationCodeFlow:
                 error_description=error_response['error_description']
             )
 
-        # TODO: check if scope is returned by server
         return OAuthToken.from_json(response.json())
 
     def _validate_token(self, token: Optional[OAuthToken]) -> bool:
