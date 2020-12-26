@@ -18,5 +18,5 @@ class SptfyOAuthRedirect(SptfyError):
         super().__init__(message)
 
 
-class SptfyRequestError(SptfyError):
+class SptfyApiError(SptfyError):
     pass

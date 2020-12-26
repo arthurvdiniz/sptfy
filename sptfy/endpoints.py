@@ -6,9 +6,10 @@ from urllib.parse import urlencode, quote
 import requests
 
 from sptfy.types import JsonDict
+from sptfy.errors import SptfyApiError
 
 
-def with_transformer(endpoint: str):
+def _with_transformer(endpoint: str):
     """
     Applies a transform to the API json result, if one is specified.
 
@@ -42,7 +43,7 @@ class TracksEndpoint:
         token = self.oauth_manager.get_access_token()
         return {'Authorization': f'Bearer {token.access_token}'}
 
-    @with_transformer('tracks.get')
+    @_with_transformer('tracks.get')
     def get(self, track_id: str) -> JsonDict:
         headers = self._auth_header()
 
@@ -54,11 +55,11 @@ class TracksEndpoint:
         )
 
         if response.status_code != 200:
-            raise Exception(f'Error downloading tracks: {response.reason}')
+            raise SptfyApiError(f'Error downloading tracks: {response.reason}')
 
         return response.json()
 
-    @with_transformer('tracks.search')
+    @_with_transformer('tracks.search')
     def search(self, search_term: str) -> JsonDict:
         top_url = os.path.dirname(self.BASE_URL)
         search_url = f"{top_url}/search"
@@ -78,11 +79,11 @@ class TracksEndpoint:
         )
 
         if response.status_code != 200:
-            raise Exception(f"Error searching tracks: {response.reason}")
+            raise SptfyApiError(f"Error searching tracks: {response.reason}")
 
         return response.json()
 
-    @with_transformer('tracks.audio_features')
+    @_with_transformer('tracks.audio_features')
     def audio_features(self, track_id: str):
         base_url = os.path.dirname(self.BASE_URL)
         full_url = f"{base_url}/audio-features/{track_id}"
@@ -94,13 +95,13 @@ class TracksEndpoint:
         )
 
         if response.status_code != 200:
-            raise Exception(f'Error getting track features: {response.reason}')
+            raise SptfyApiError(f'Error getting track features: {response.reason}')
 
         return response.json()
 
 
 
-    @with_transformer('tracks.audio_analysis')
+    @_with_transformer('tracks.audio_analysis')
     def audio_analysis(self, track_id: str):
         base_url = os.path.dirname(self.BASE_URL)
         full_url = f"{base_url}/audio-analysis/{track_id}"
@@ -112,11 +113,9 @@ class TracksEndpoint:
         )
 
         if response.status_code != 200:
-            raise Exception(f'Error getting track analysis: {response.reason}')
+            raise SptfyApiError(f'Error getting track analysis: {response.reason}')
 
         return response.json()
-
-
 
 
 class PlaylistEndpoint:
@@ -130,7 +129,7 @@ class PlaylistEndpoint:
         token = self.oauth_manager.get_access_token()
         return {'Authorizaiton': f'Bearer {token.access_token}'}
 
-    @with_transformer('playlists.get')
+    @_with_transformer('playlists.get')
     def get(self, playlist_id: str):
         """
         Retrieves playlist information from a given playlist ID.
@@ -144,11 +143,11 @@ class PlaylistEndpoint:
         )
 
         if response.status_code != 200:
-            raise Exception(f'Error downloading playlist: {response.reason}')
+            raise SptfyApiError(f'Error downloading playlist: {response.reason}')
 
         return response.json()
 
-    @with_transformer('playlists.search')
+    @_with_transformer('playlists.search')
     def search(self, search_term: str):
         top_url = os.path.dirname(self.BASE_URL)
         search_url = f"{top_url}/search"
@@ -168,7 +167,7 @@ class PlaylistEndpoint:
         )
 
         if response.status_code != 200:
-            raise Exception(f'Error searching for playlists: {response.reason}')
+            raise SptfyApiError(f'Error searching for playlists: {response.reason}')
 
         return response.json()
 
@@ -188,7 +187,7 @@ class PlaylistEndpoint:
         )
 
         if user_info.status_code != 200:
-            raise Exception(f'Error retrieving user id: {user_info.reason}')
+            raise SptfyApiError(f'Error retrieving user id: {user_info.reason}')
 
         user_json = user_info.json()
         user_id = user_json['id']
@@ -205,7 +204,7 @@ class PlaylistEndpoint:
         )
 
         if response.status_code != 200:
-            raise Exception(f'Error creating playlist: {response.reason}')
+            raise SptfyApiError(f'Error creating playlist: {response.reason}')
 
         if songs:
             json_response = response.json()
@@ -236,12 +235,12 @@ class PlaylistEndpoint:
         )
 
         if response.status_code != 200:
-            raise Exception(f"Error adding items to playlist: {response.reason}")
+            raise SptfyApiError(f"Error adding items to playlist: {response.reason}")
 
     def remove_from(self, playlist_name: str, songs: t.List[str]):
         pass
 
-    @with_transformer('playlists.from_user')
+    @_with_transformer('playlists.from_user')
     def from_user(self , user_id: str):
         pass
 
@@ -257,6 +256,7 @@ class ArtistsEndpoint:
         token = self.oauth_manager.get_access_token()
         return {'Authorizaiton': f'Bearer {token.access_token}'}
 
+    @_with_transformer('artists.get')
     def get(self, artist_id: str):
         headers = self._auth_header()
         full_url = f"{self.BASE_URL}/{artist_id}"
@@ -267,36 +267,10 @@ class ArtistsEndpoint:
         )
 
         if response.status_code != 200:
-            raise Exception(f'Error downloading artists: {response.reason}')
+            raise SptfyApiError(f'Error downloading artists: {response.reason}')
 
         return response.json()
 
-
-class ArtistsEndpoint:
-    BASE_URL = 'https://api.spotify.com/v1/artists'
-
-    def __init__(self, oauth_manager, transformer_cache):
-        self.oauth_manager = oauth_manager
-        self.transformer_cache = transformer_cache
-
-    def _auth_header(self) -> t.Dict[str, str]:
-        token = self.oauth_manager.get_access_token()
-        return {'Authorizaiton': f'Bearer {token.access_token}'}
-
-    @with_transformer('artists.get')
-    def get(self, artist_id: str):
-        headers = self._auth_header()
-        full_url = f"{self.BASE_URL}/{artist_id}"
-
-        response = requests.get(
-            full_url,
-            headers=headers
-        )
-
-        if response.status_code != 200:
-            raise Exception(f'Error downloading artists: {response.reason}')
-
-        return response.json()
 
 class AlbumsEndpoint:
     BASE_URL = 'https://api.spotify.com/v1/albums'
@@ -309,7 +283,7 @@ class AlbumsEndpoint:
         token = self.oauth_manager.get_access_token()
         return {'Authorizaiton': f'Bearer {token.access_token}'}
 
-    @with_transformer('albums.get')
+    @_with_transformer('albums.get')
     def get(self, album_id: str):
         headers = self._auth_header()
         full_url = f"{self.BASE_URL}/{album_id}"
@@ -320,7 +294,7 @@ class AlbumsEndpoint:
         )
 
         if response.status_code != 200:
-            raise Exception(f'Error downloading album: {response.reason}')
+            raise SptfyApiError(f'Error downloading album: {response.reason}')
 
         return response.json()
 
