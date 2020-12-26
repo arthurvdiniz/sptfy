@@ -1,5 +1,7 @@
 import pytest
 
+import sptfy.oauth as oauth
+
 
 @pytest.fixture()
 def sptfy_environment(monkeypatch):
@@ -19,3 +21,29 @@ def empty_environment(monkeypatch):
     monkeypatch.delenv('SPTFY_CLIENT_ID', raising=False)
     monkeypatch.delenv('SPTFY_CLIENT_SECRET', raising=False)
     monkeypatch.delenv('SPTFY_REDIRECT_URI', raising=False)
+
+
+@pytest.fixture
+def token_file_cache(tmp_path):
+    """
+    Creates and empty file based token cache
+    in a temporary file.
+    """
+    
+    cache_file = tmp_path / '.cache'
+    cache = oauth.FileCache(cache_file)
+    return cache
+
+@pytest.fixture
+def file_cache_with_token(token_file_cache):
+    token = oauth.OAuthToken(
+        access_token='some-random-token',
+        token_type='Bearer',
+        expires_in=3600,
+        scope=['foo', 'bar']
+    )
+
+    token_file_cache.save_token(token)
+    return token_file_cache
+
+

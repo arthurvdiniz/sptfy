@@ -4,7 +4,10 @@ from contextlib import contextmanager
 
 import sptfy.oauth as oauth
 import sptfy.utils as utils
-from sptfy.endpoints import TracksEndpoint, PlaylistEndpoint
+from sptfy.endpoints import (
+    TracksEndpoint, PlaylistEndpoint, 
+    ArtistsEndpoint, AlbumsEndpoint
+)
 
 
 class Spotify:
@@ -27,6 +30,8 @@ class Spotify:
 
         self.tracks = TracksEndpoint(self.oauth_manager, self.transformer_cache)
         self.playlists = PlaylistEndpoint(self.oauth_manager, self.transformer_cache)
+        self.artists = ArtistsEndpoint(self.oauth_manager, self.transformer_cache)
+        self.albums = AlbumsEndpoint(self.oauth_manager, self.transformer_cache)
 
     def transformer(self, endpoint: str):
         """
@@ -65,6 +70,8 @@ class Spotify:
 class AsyncSpotify:
     tracks: TracksEndpoint
     playlists: PlaylistEndpoint
+    artists: ArtistsEndpoint
+    albums: AlbumsEndpoint
 
     def __init__(self, oauth_manager=None):
         if oauth_manager:
@@ -80,6 +87,12 @@ class AsyncSpotify:
         )
         self.tracks = AsyncEndpoint(
             TracksEndpoint(self.oauth_manager, self.transformer_cache)
+        )
+        self.artists = AsyncEndpoint(
+            ArtistsEndpoint(self.oauth_manager, self.transformer_cache)
+        )
+        self.albums = AsyncEndpoint(
+            AlbumsEndpoint(self.oauth_manager, self.transformer_cache)
         )
 
 

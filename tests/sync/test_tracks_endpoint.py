@@ -7,29 +7,11 @@ import sptfy.oauth as oauth
 from sptfy.clients import Spotify
 
 
-@pytest.fixture
-def token_file_cache(tmp_path):
-    """
-    Creates a token cache with a fake OAuth token,
-    so that the tests avoid authenticating with the
-    API.
-    """
-    token = oauth.OAuthToken(
-        access_token='some-random-token',
-        token_type='Bearer',
-        expires_in=3600,
-        scope=['foo', 'bar']
-    )
-
-    cache_file = tmp_path / '.cache'
-    cache = oauth.FileCache(cache_file)
-    cache.save_token(token)
-
-    return cache
-
-
 @responses.activate
-def test_spotify_tracks_get_should_call_endpoint(sptfy_environment, token_file_cache):
+def test_spotify_tracks_get_should_call_endpoint(
+    sptfy_environment, 
+    file_cache_with_token
+):
     # Given: An user specified track id
     track_id = 'some-track-id'
     responses.add(
@@ -40,7 +22,10 @@ def test_spotify_tracks_get_should_call_endpoint(sptfy_environment, token_file_c
     )
 
     credentials = oauth.ClientCredentials.from_env_variables()
-    oauth_manager = oauth.AuthorizationCodeFlow(credentials, token_cache=token_file_cache)
+    oauth_manager = oauth.AuthorizationCodeFlow(
+        credentials, 
+        token_cache=file_cache_with_token
+    )
 
     # When: trying to retrieve a track
     sptfy = Spotify(oauth_manager=oauth_manager)
@@ -50,7 +35,10 @@ def test_spotify_tracks_get_should_call_endpoint(sptfy_environment, token_file_c
 
 
 @responses.activate
-def test_spotify_tracks_get_should_accept_transform(sptfy_environment, token_file_cache):
+def test_spotify_tracks_get_should_accept_transform(
+    sptfy_environment, 
+    file_cache_with_token
+):
     track_id = 'some-track-id'
     responses.add(
         responses.GET,
@@ -60,7 +48,10 @@ def test_spotify_tracks_get_should_accept_transform(sptfy_environment, token_fil
     )
 
     credentials = oauth.ClientCredentials.from_env_variables()
-    oauth_manager = oauth.AuthorizationCodeFlow(credentials, token_cache=token_file_cache)
+    oauth_manager = oauth.AuthorizationCodeFlow(
+        credentials, 
+        token_cache=file_cache_with_token
+    )
 
     # Given: a transformer that retrieves the track's name
     def retrieve_name(response):
@@ -78,7 +69,7 @@ def test_spotify_tracks_get_should_accept_transform(sptfy_environment, token_fil
 @responses.activate
 def test_spotify_tracks_get_should_accept_cached_transform(
     sptfy_environment,
-    token_file_cache
+    file_cache_with_token
 ):
     track_id = 'some-track-id'
     responses.add(
@@ -89,7 +80,10 @@ def test_spotify_tracks_get_should_accept_cached_transform(
     )
 
     credentials = oauth.ClientCredentials.from_env_variables()
-    oauth_manager = oauth.AuthorizationCodeFlow(credentials, token_cache=token_file_cache)
+    oauth_manager = oauth.AuthorizationCodeFlow(
+        credentials, 
+        token_cache=file_cache_with_token
+    )
 
     # Given: a transformer that retrieves the track's name, 
     # that its cached on the Spotify object.
@@ -107,7 +101,7 @@ def test_spotify_tracks_get_should_accept_cached_transform(
 
 def test_tracks_get_should_raise_exception_if_not_200(
     sptfy_environment,
-    token_file_cache
+    file_cache_with_token
 ):
     # Given: An inexistent track object (i.e. 404)
     track_id = 'some-track-id'
@@ -118,7 +112,10 @@ def test_tracks_get_should_raise_exception_if_not_200(
     )
 
     credentials = oauth.ClientCredentials.from_env_variables()
-    oauth_manager = oauth.AuthorizationCodeFlow(credentials, token_cache=token_file_cache)
+    oauth_manager = oauth.AuthorizationCodeFlow(
+        credentials, 
+        token_cache=file_cache_with_token
+    )
     sptfy = Spotify(oauth_manager=oauth_manager)
 
     # When: getting a inexistent track
@@ -130,7 +127,7 @@ def test_tracks_get_should_raise_exception_if_not_200(
 @responses.activate
 def test_tracks_search_should_hit_correct_endpoint(
     sptfy_environment,
-    token_file_cache
+    file_cache_with_token
 ):
     # Given: An inexistent track object (i.e. 404)
     track_name = 'The Lost Chord'
@@ -153,7 +150,10 @@ def test_tracks_search_should_hit_correct_endpoint(
     )
 
     credentials = oauth.ClientCredentials.from_env_variables()
-    oauth_manager = oauth.AuthorizationCodeFlow(credentials, token_cache=token_file_cache)
+    oauth_manager = oauth.AuthorizationCodeFlow(
+        credentials, 
+        token_cache=file_cache_with_token
+    )
 
     sptfy = Spotify(oauth_manager=oauth_manager)
 
@@ -166,9 +166,9 @@ def test_tracks_search_should_hit_correct_endpoint(
 
 
 @responses.activate
-def test_tracks_search_should_hit_correct_endpoint(
+def test_tracks_search_should_throw_exception_on_error(
     sptfy_environment,
-    token_file_cache
+    file_cache_with_token
 ):
     track_name = 'Lets go to the mall'
     search_query = {
@@ -185,7 +185,10 @@ def test_tracks_search_should_hit_correct_endpoint(
     )
 
     credentials = oauth.ClientCredentials.from_env_variables()
-    oauth_manager = oauth.AuthorizationCodeFlow(credentials, token_cache=token_file_cache)
+    oauth_manager = oauth.AuthorizationCodeFlow(
+        credentials, 
+        token_cache=file_cache_with_token
+    )
 
     sptfy = Spotify(oauth_manager=oauth_manager)
 

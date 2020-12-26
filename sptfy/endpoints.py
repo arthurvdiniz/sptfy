@@ -108,13 +108,33 @@ class PlaylistEndpoint:
         )
 
         if response.status_code != 200:
-            raise Exception(f'Error downloading tracks: {response.reason}')
+            raise Exception(f'Error downloading playlist: {response.reason}')
 
         return response.json()
 
     @with_transformer('playlists.search')
-    def search(self, query: str):
-        pass
+    def search(self, search_term: str):
+        top_url = os.path.dirname(self.BASE_URL)
+        search_url = f"{top_url}/search"
+
+        query = {
+            'q': quote(search_term),
+            'type': 'playlist'
+        }
+
+        params = urlencode(query)
+        full_url = f'{search_url}?{params}'
+        headers = self._auth_header()
+
+        response = requests.get(
+            full_url,
+            headers=headers
+        )
+
+        if response.status_code != 200:
+            raise Exception(f'Error searching for playlists: {response.reason}')
+
+        return response.json()
 
     def create(
         self, 
@@ -189,4 +209,82 @@ class PlaylistEndpoint:
     def from_user(self , user_id: str):
         pass
 
+
+class ArtistsEndpoint:
+    BASE_URL = 'https://api.spotify.com/v1/artists'
+
+    def __init__(self, oauth_manager, transformer_cache):
+        self.oauth_manager = oauth_manager
+        self.transformer_cache = transformer_cache
+
+    def _auth_header(self) -> t.Dict[str, str]:
+        token = self.oauth_manager.get_access_token()
+        return {'Authorizaiton': f'Bearer {token.access_token}'}
+
+    def get(self, artist_id: str):
+        headers = self._auth_header()
+        full_url = f"{self.BASE_URL}/{artist_id}"
+
+        response = requests.get(
+            full_url,
+            headers=headers
+        )
+
+        if response.status_code != 200:
+            raise Exception(f'Error downloading artists: {response.reason}')
+
+        return response.json()
+
+
+class ArtistsEndpoint:
+    BASE_URL = 'https://api.spotify.com/v1/artists'
+
+    def __init__(self, oauth_manager, transformer_cache):
+        self.oauth_manager = oauth_manager
+        self.transformer_cache = transformer_cache
+
+    def _auth_header(self) -> t.Dict[str, str]:
+        token = self.oauth_manager.get_access_token()
+        return {'Authorizaiton': f'Bearer {token.access_token}'}
+
+    @with_transformer('artists.get')
+    def get(self, artist_id: str):
+        headers = self._auth_header()
+        full_url = f"{self.BASE_URL}/{artist_id}"
+
+        response = requests.get(
+            full_url,
+            headers=headers
+        )
+
+        if response.status_code != 200:
+            raise Exception(f'Error downloading artists: {response.reason}')
+
+        return response.json()
+
+class AlbumsEndpoint:
+    BASE_URL = 'https://api.spotify.com/v1/albums'
+
+    def __init__(self, oauth_manager, transformer_cache):
+        self.oauth_manager = oauth_manager
+        self.transformer_cache = transformer_cache
+
+    def _auth_header(self) -> t.Dict[str, str]:
+        token = self.oauth_manager.get_access_token()
+        return {'Authorizaiton': f'Bearer {token.access_token}'}
+
+    @with_transformer('albums.get')
+    def get(self, album_id: str):
+        headers = self._auth_header()
+        full_url = f"{self.BASE_URL}/{album_id}"
+
+        response = requests.get(
+            full_url,
+            headers=headers
+        )
+
+        if response.status_code != 200:
+            raise Exception(f'Error downloading album: {response.reason}')
+
+        return response.json()
 
