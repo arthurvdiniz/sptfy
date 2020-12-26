@@ -271,6 +271,30 @@ class ArtistsEndpoint:
 
         return response.json()
 
+    @_with_transformer('artists.search')
+    def search(self, search_term: str):
+        top_url = os.path.dirname(self.BASE_URL)
+        search_url = f"{top_url}/search"
+
+        query = {
+            'q': quote(search_term),
+            'type': 'artist'
+        }
+
+        params = urlencode(query)
+        full_url = f'{search_url}?{params}'
+        headers = self._auth_header()
+
+        response = requests.get(
+            full_url,
+            headers=headers
+        )
+
+        if response.status_code != 200:
+            raise SptfyApiError(f'Error searching for artists: {response.reason}')
+
+        return response.json()
+
 
 class AlbumsEndpoint:
     BASE_URL = 'https://api.spotify.com/v1/albums'
@@ -298,3 +322,26 @@ class AlbumsEndpoint:
 
         return response.json()
 
+    @_with_transformer('albums.search')
+    def search(self, search_term: str):
+        top_url = os.path.dirname(self.BASE_URL)
+        search_url = f"{top_url}/search"
+
+        query = {
+            'q': quote(search_term),
+            'type': 'album'
+        }
+
+        params = urlencode(query)
+        full_url = f'{search_url}?{params}'
+        headers = self._auth_header()
+
+        response = requests.get(
+            full_url,
+            headers=headers
+        )
+
+        if response.status_code != 200:
+            raise SptfyApiError(f'Error searching for albums: {response.reason}')
+
+        return response.json()

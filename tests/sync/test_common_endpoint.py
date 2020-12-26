@@ -15,8 +15,8 @@ from sptfy.clients import Spotify
 search_params = [
     ("playlists", "Best Of 2019"), 
     ("tracks", "Trust"),
-    # ("artists", "Gorillaz"),
-    # ("albums", "To Pimp A Butterfly"),
+    ("artists", "Gorillaz"),
+    ("albums", "To Pimp A Butterfly"),
 ]
 
 
