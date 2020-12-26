@@ -87,8 +87,9 @@ class AsyncEndpoint:
     """
     Transforms an endpoint into an async one.
 
-    This is not an async over sync wrapper, since the http requests will be 
-    done with aiohttp, which is not blocking.
+    The asynchronous tasks are executed by offloading a synchronous task into
+    a executor thread. Due to the GIL, this method is only useful with IO
+    bound tasks.
     """
     def __init__(self, endpoint):
         self.endpoint = endpoint

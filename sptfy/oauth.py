@@ -10,6 +10,7 @@ import json
 import time
 import webbrowser
 import base64
+import secrets
 
 from enum import Enum
 from urllib.parse import urlencode
@@ -292,6 +293,22 @@ class ClientCredentials:
         return {'Authorization': f"Basic {base64_code.decode('ascii')}"}
 
 
+def _build_url(credentials: ClientCredentials) -> str:
+    """
+        Creates the authorization url with the right query
+        string for the client.
+    """
+    query = {
+        'client_id': credentials.client_id,
+        'response_type': 'code',
+        'redirect_uri': credentials.redirect_uri,
+        'scope': ' '.join(credentials.scope)
+    }
+
+    params = urlencode(query)
+    return f'{OAUTH_AUTHORIZATION_ENDPOINT}?{params}'
+
+
 class StubCache:
     """
         Implements the interface necessary for a token cache but does nothing.
@@ -350,42 +367,15 @@ class TerminalPromptAuth:
         from the standard library to open a browser window for
         user interaction.
     """
-    def __init__(self, credentials: ClientCredentials, token_cache):
-        self.credentials = credentials
-        self.token_cache = token_cache
-
-    def authorize(self):
-        auth_url = self.build_url()
+    def authorize(self, credentials: ClientCredentials):
+        auth_url = _build_url(credentials)
         try:
             webbrowser.open(auth_url)
         except webbrowser.Error:
             print(f'Please open the following url: {auth_url}')
 
         authorization_code = input('Please insert the code you were given: ')
-        return self.retrieve_token(authorization_code)
-
-    # Define a retrieve_token method here
-    # It should get the token and save it to cache
-    def retrieve_token(self, authorization_code: str):
-        access_token = utils.retrieve_token(authorization_code, self.credentials)
-        self.token_cache.save_token(access_token)
-        return access_token
-
-
-    def build_url(self) -> str:
-        """
-            Creates the authorization url with the right query
-            string for the client.
-        """
-        query = {
-            'client_id': self.credentials.client_id,
-            'response_type': 'code',
-            'redirect_uri': self.credentials.redirect_uri,
-            'scope': ' '.join(self.credentials.scope)
-        }
-
-        params = urlencode(query)
-        return f'{OAUTH_AUTHORIZATION_ENDPOINT}?{params}'
+        return utils.retrieve_token(authorization_code, credentials)
 
 
 class WebBackendAuth:
@@ -394,37 +384,13 @@ class WebBackendAuth:
 
     The methods are aimed to be used in views.
     """
-    def __init__(self, credentials: ClientCredentials, token_cache):
-        self.credentials = credentials
-        self.token_cache = token_cache
-
-    def authorize(self):
+    def authorize(self, credentials: ClientCredentials):
         raise SptfyOAuthRedirect(
             "No token available. User needs to authorize app.", 
-            redirect_url=self.build_url()
+            redirect_url=_build_url(credentials)
         )
 
-    def retrieve_token(self, authorization_code: str):
-        token = utils.retrieve_token(authorization_code, self.credentials)
-        self.token_cache.save_token(token)
-        return token
-
-    def build_url(self) -> str:
-        """
-            Creates the authorization url with the right query
-            string for the client.
-        """
-        query = {
-            'client_id': self.credentials.client_id,
-            'response_type': 'code',
-            'redirect_uri': self.credentials.redirect_uri,
-            'scope': ' '.join(self.credentials.scope)
-        }
-
-        params = urlencode(query)
-        return f'{OAUTH_AUTHORIZATION_ENDPOINT}?{params}'
-
-
+        
 class ClientCredentialsFlow:
     """
         Manages getting an access token using the Spotify API client
@@ -546,7 +512,7 @@ class AuthorizationCodeFlow:
         if auth_strategy:
             self.auth_strategy = auth_strategy
         else:
-            self.auth_strategy = TerminalPromptAuth(self.credentials, self.token_cache)
+            self.auth_strategy = TerminalPromptAuth()
 
 
     def get_access_token(self) -> OAuthToken:
@@ -577,7 +543,7 @@ class AuthorizationCodeFlow:
         is_new_token = False
         if not token:
             is_new_token = True
-            token = self.auth_strategy.authorize()
+            token = self.auth_strategy.authorize(self.credentials)
 
         if token.is_expired:
             is_new_token = True

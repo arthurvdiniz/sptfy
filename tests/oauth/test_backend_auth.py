@@ -35,12 +35,9 @@ def test_web_backend_auth_should_throw_exception_if_no_token_cached(
 ):
     track_id = 'some-track-id'
 
-    # I dislike that the user needs to specify the same cache
-    # for both the auth strategy and manager
-
     credentials = oauth.ClientCredentials.from_env_variables() 
     # Given: A web backend strategy is chosen and an empty cache
-    strategy = oauth.WebBackendAuth(credentials, token_file_cache)
+    strategy = oauth.WebBackendAuth()
     manager = oauth.AuthorizationCodeFlow(credentials, token_file_cache, strategy)
     sptfy = Spotify(oauth_manager=manager)
 
@@ -62,10 +59,9 @@ def test_web_backend_auth_shouldnt_throw_exception_if_token_is_available(
         status=200,
     )
 
-
     credentials = oauth.ClientCredentials.from_env_variables() 
     # Given: A web backend strategy is chosen and full cache
-    strategy = oauth.WebBackendAuth(credentials, file_cache_with_token)
+    strategy = oauth.WebBackendAuth()
     manager = oauth.AuthorizationCodeFlow(credentials, file_cache_with_token, strategy)
     sptfy = Spotify(oauth_manager=manager)
 

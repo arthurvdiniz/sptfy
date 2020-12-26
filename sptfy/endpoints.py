@@ -8,7 +8,7 @@ import requests
 from sptfy.types import JsonDict
 
 
-def with_transformer(endpoint):
+def with_transformer(endpoint: str):
     """
     Applies a transform to the API json result, if one is specified.
 
@@ -59,7 +59,7 @@ class TracksEndpoint:
         return response.json()
 
     @with_transformer('tracks.search')
-    def search(self, search_term: str):
+    def search(self, search_term: str) -> JsonDict:
         top_url = os.path.dirname(self.BASE_URL)
         search_url = f"{top_url}/search"
 
