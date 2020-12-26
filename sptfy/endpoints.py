@@ -55,7 +55,7 @@ class TracksEndpoint:
         )
 
         if response.status_code != 200:
-            raise SptfyApiError(f'Error downloading tracks: {response.reason}')
+            raise SptfyApiError(f'Error requesting track: {track_id} - {response.reason}')
 
         return response.json()
 
@@ -79,7 +79,7 @@ class TracksEndpoint:
         )
 
         if response.status_code != 200:
-            raise SptfyApiError(f"Error searching tracks: {response.reason}")
+            raise SptfyApiError(f"Error searching track: {search_term} - {response.reason}")
 
         return response.json()
 
@@ -143,7 +143,7 @@ class PlaylistEndpoint:
         )
 
         if response.status_code != 200:
-            raise SptfyApiError(f'Error downloading playlist: {response.reason}')
+            raise SptfyApiError(f'Error requesting playlist: {playlist_id} - {response.reason}')
 
         return response.json()
 
@@ -167,7 +167,7 @@ class PlaylistEndpoint:
         )
 
         if response.status_code != 200:
-            raise SptfyApiError(f'Error searching for playlists: {response.reason}')
+            raise SptfyApiError(f'Error searching playlist: {search_term} - {response.reason}')
 
         return response.json()
 
@@ -266,7 +266,7 @@ class ArtistsEndpoint:
         )
 
         if response.status_code != 200:
-            raise SptfyApiError(f'Error downloading artists: {response.reason}')
+            raise SptfyApiError(f'Error requesting artists: {artist_id} - {response.reason}')
 
         return response.json()
 
@@ -290,7 +290,7 @@ class ArtistsEndpoint:
         )
 
         if response.status_code != 200:
-            raise SptfyApiError(f'Error searching for artists: {response.reason}')
+            raise SptfyApiError(f'Error searching artist: {search_term} {response.reason}')
 
         return response.json()
 
@@ -317,7 +317,7 @@ class AlbumsEndpoint:
         )
 
         if response.status_code != 200:
-            raise SptfyApiError(f'Error downloading album: {response.reason}')
+            raise SptfyApiError(f'Error requesting album: {album_id} - {response.reason}')
 
         return response.json()
 
@@ -341,6 +341,6 @@ class AlbumsEndpoint:
         )
 
         if response.status_code != 200:
-            raise SptfyApiError(f'Error searching for albums: {response.reason}')
+            raise SptfyApiError(f'Error searching albums: {search_term} - {response.reason}')
 
         return response.json()

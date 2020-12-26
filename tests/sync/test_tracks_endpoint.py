@@ -99,31 +99,6 @@ def test_spotify_tracks_get_should_accept_cached_transform(
     assert response == 'Labyrinth'
 
 
-def test_tracks_get_should_raise_exception_if_not_200(
-    sptfy_environment,
-    file_cache_with_token
-):
-    # Given: An inexistent track object (i.e. 404)
-    track_id = 'some-track-id'
-    responses.add(
-        responses.GET,
-        f'https://api.spotify.com/v1/tracks/{track_id}',
-        status=404,
-    )
-
-    credentials = oauth.ClientCredentials.from_env_variables()
-    oauth_manager = oauth.AuthorizationCodeFlow(
-        credentials, 
-        token_cache=file_cache_with_token
-    )
-    sptfy = Spotify(oauth_manager=oauth_manager)
-
-    # When: getting a inexistent track
-    # Then: an exception should be raised
-    with pytest.raises(Exception):
-        sptfy.tracks.get(track_id)
-
-
 @responses.activate
 def test_tracks_search_should_hit_correct_endpoint(
     sptfy_environment,
@@ -164,38 +139,6 @@ def test_tracks_search_should_hit_correct_endpoint(
     # that matches the query
     assert len(response['tracks']['items']) == 3
 
-
-@responses.activate
-def test_tracks_search_should_throw_exception_on_error(
-    sptfy_environment,
-    file_cache_with_token
-):
-    track_name = 'Lets go to the mall'
-    search_query = {
-        'q': quote(track_name), 
-        'type': 'track',
-    }
-    params = urlencode(search_query)
-
-    # Given: An api problem
-    responses.add(
-        responses.GET,
-        f'https://api.spotify.com/v1/search?{params}',
-        status=500,
-    )
-
-    credentials = oauth.ClientCredentials.from_env_variables()
-    oauth_manager = oauth.AuthorizationCodeFlow(
-        credentials, 
-        token_cache=file_cache_with_token
-    )
-
-    sptfy = Spotify(oauth_manager=oauth_manager)
-
-    # When: server error occurs
-    # Then: it should raise an exception
-    with pytest.raises(Exception):
-        sptfy.tracks.search(track_name)
 
 @responses.activate
 def test_tracks_audio_features_should_call_correct_endpoint(
