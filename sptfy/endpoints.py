@@ -82,6 +82,42 @@ class TracksEndpoint:
 
         return response.json()
 
+    @with_transformer('tracks.audio_features')
+    def audio_features(self, track_id: str):
+        base_url = os.path.dirname(self.BASE_URL)
+        full_url = f"{base_url}/audio-features/{track_id}"
+        headers = self._auth_header()
+
+        response = requests.get(
+            full_url,
+            headers=headers
+        )
+
+        if response.status_code != 200:
+            raise Exception(f'Error getting track features: {response.reason}')
+
+        return response.json()
+
+
+
+    @with_transformer('tracks.audio_analysis')
+    def audio_analysis(self, track_id: str):
+        base_url = os.path.dirname(self.BASE_URL)
+        full_url = f"{base_url}/audio-analysis/{track_id}"
+        headers = self._auth_header()
+
+        response = requests.get(
+            full_url,
+            headers=headers
+        )
+
+        if response.status_code != 200:
+            raise Exception(f'Error getting track analysis: {response.reason}')
+
+        return response.json()
+
+
+
 
 class PlaylistEndpoint:
     BASE_URL = 'https://api.spotify.com/v1/playlists'

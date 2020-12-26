@@ -197,4 +197,61 @@ def test_tracks_search_should_throw_exception_on_error(
     with pytest.raises(Exception):
         sptfy.tracks.search(track_name)
 
+@responses.activate
+def test_tracks_audio_features_should_call_correct_endpoint(
+    sptfy_environment, 
+    file_cache_with_token
+):
+    # Given: An user specified track id
+    track_id = 'some-track-id'
+    responses.add(
+        responses.GET,
+        f'https://api.spotify.com/v1/audio-features/{track_id}',
+        json={'id': track_id, 'acousticness': 0.78, 'duration_ms': 12000},
+        status=200,
+    )
+
+    credentials = oauth.ClientCredentials.from_env_variables()
+    oauth_manager = oauth.AuthorizationCodeFlow(
+        credentials, 
+        token_cache=file_cache_with_token
+    )
+
+    # When: trying to retrieve a track
+    sptfy = Spotify(oauth_manager=oauth_manager)
+    response = sptfy.tracks.audio_features(track_id=track_id)
+
+    # TODO: change these assertions to query matchers from responses
+    assert response['id'] == track_id 
+    assert response['acousticness'] == 0.78
+
+
+@responses.activate
+def test_tracks_audio_analysis_should_call_correct_endpoint(
+    sptfy_environment, 
+    file_cache_with_token
+):
+    analysis = {'bars': [{'start': 120.1, 'duration': 0.3, 'confidence': 0.60}]}
+    # Given: An user specified track id
+    track_id = 'some-track-id'
+    responses.add(
+        responses.GET,
+        f'https://api.spotify.com/v1/audio-analysis/{track_id}',
+        json=analysis,
+        status=200,
+    )
+
+    credentials = oauth.ClientCredentials.from_env_variables()
+    oauth_manager = oauth.AuthorizationCodeFlow(
+        credentials, 
+        token_cache=file_cache_with_token
+    )
+
+    # When: trying to retrieve a track
+    sptfy = Spotify(oauth_manager=oauth_manager)
+    response = sptfy.tracks.audio_analysis(track_id=track_id)
+
+    # TODO: change this assertion to query matchers from responses
+    assert response == analysis
+
 
