@@ -219,7 +219,6 @@ class PlaylistEndpoint:
         position: t.Optional[int] = None
     ):
         headers = self._auth_header()
-        headers['Content-Type'] = 'application/json'
         full_url = f"{self.BASE_URL}/{playlist_id}/tracks"
 
         post_data : t.Dict[str, t.Any] = {
@@ -231,7 +230,7 @@ class PlaylistEndpoint:
         response = requests.post(
             full_url,
             headers=headers,
-            data=post_data
+            json=post_data
         )
 
         if response.status_code != 200:
