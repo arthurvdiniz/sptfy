@@ -1,5 +1,7 @@
 import functools
-import typing as t
+from typing import (
+    Optional, Any, Callable, Union
+)
 from contextlib import contextmanager
 
 import sptfy.oauth as oauth
@@ -10,32 +12,22 @@ from sptfy.endpoints import (
 )
 
 
-class Spotify:
-    """
-    Represents an user session to the Spotify Web API.
-
-    By default it uses the Authorization Code Flow, but it can 
-    be changed by using the [oauth_manager] argument.
-    """
-    BASE_URL = 'https://api.spotify.com/v1'
-
-    def __init__(self, oauth_manager=None):
+class _SpotifyClient:
+    def __init__(
+        self, 
+        oauth_manager: Optional[oauth.OAuthManager] = None
+    ):
         if oauth_manager:
             self.oauth_manager = oauth_manager
         else:
             credentials = oauth.ClientCredentials.from_env_variables()
             self.oauth_manager = oauth.AuthorizationCodeFlow(credentials)
-
+        
         self.transformer_cache = {}
-
-        self.tracks = TracksEndpoint(self.oauth_manager, self.transformer_cache)
-        self.playlists = PlaylistEndpoint(self.oauth_manager, self.transformer_cache)
-        self.artists = ArtistsEndpoint(self.oauth_manager, self.transformer_cache)
-        self.albums = AlbumsEndpoint(self.oauth_manager, self.transformer_cache)
 
     def transformer(self, endpoint: str):
         """
-        Registers a transformer to this Spotify session.
+        Registers a transformer to this Spotify client.
 
         Works similarly to Flask's @app.route() decorator.
         """
@@ -56,8 +48,8 @@ class Spotify:
 
         Usage
         -------
-        with sptfy.disable_transformers():
-            sptfy.tracks.get('some-id')
+        with sptf.disable_transformers():
+            sptf.tracks.get('some-id')
         """
         try:
             cached_transformers = dict(self.transformer_cache)
@@ -67,20 +59,38 @@ class Spotify:
             self.transformer_cache.update(cached_transformers)
 
 
-class AsyncSpotify:
+class Spotify(_SpotifyClient):
+    """
+    Represents an user session to the Spotify Web API.
+
+    By default it uses the Authorization Code Flow, but it can 
+    be changed by using the [oauth_manager] argument.
+    """
+    BASE_URL = 'https://api.spotify.com/v1'
+
+    def __init__(
+        self, 
+        oauth_manager: Optional[oauth.OAuthManager] = None
+    ):
+        super().__init__(oauth_manager)
+
+        self.tracks = TracksEndpoint(self.oauth_manager, self.transformer_cache)
+        self.playlists = PlaylistEndpoint(self.oauth_manager, self.transformer_cache)
+        self.artists = ArtistsEndpoint(self.oauth_manager, self.transformer_cache)
+        self.albums = AlbumsEndpoint(self.oauth_manager, self.transformer_cache)
+
+
+class AsyncSpotify(_SpotifyClient):
     tracks: TracksEndpoint
     playlists: PlaylistEndpoint
     artists: ArtistsEndpoint
     albums: AlbumsEndpoint
 
-    def __init__(self, oauth_manager=None):
-        if oauth_manager:
-            self.oauth_manager = oauth_manager
-        else:
-            credentials = oauth.ClientCredentials.from_env_variables()
-            self.oauth_manager = oauth.AuthorizationCodeFlow(credentials)
-
-        self.transformer_cache = {}
+    def __init__(
+        self, 
+        oauth_manager: Optional[oauth.OAuthManager] = None
+    ):
+        super().__init__(oauth_manager)
 
         self.playlists = AsyncEndpoint(
             PlaylistEndpoint(self.oauth_manager, self.transformer_cache)
@@ -107,7 +117,7 @@ class AsyncEndpoint:
     def __init__(self, endpoint):
         self.endpoint = endpoint
 
-    def __getattr__(self, name: str) -> t.Union[t.Any, t.Callable]:
+    def __getattr__(self, name: str) -> Union[Any, Callable]:
         attr = getattr(self.endpoint, name)
 
         if not callable(attr):

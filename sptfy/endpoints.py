@@ -32,16 +32,22 @@ def _with_transformer(endpoint: str):
     return apply_transform
 
 
-class TracksEndpoint:
-    BASE_URL = 'https://api.spotify.com/v1/tracks'
-
-    def __init__(self, oauth_manager, transformer_cache) -> None:
+class _Endpoint:
+    def __init__(
+        self, 
+        oauth_manager,
+        transformer_cache
+    ):
         self.oauth_manager = oauth_manager
         self.transformer_cache = transformer_cache
 
     def _auth_header(self) -> t.Dict[str, str]:
         token = self.oauth_manager.get_access_token()
         return {'Authorization': f'Bearer {token.access_token}'}
+
+
+class TracksEndpoint(_Endpoint):
+    BASE_URL = 'https://api.spotify.com/v1/tracks'
 
     @_with_transformer('tracks.get')
     def get(self, track_id: str) -> JsonDict:
@@ -118,16 +124,8 @@ class TracksEndpoint:
         return response.json()
 
 
-class PlaylistEndpoint:
+class PlaylistEndpoint(_Endpoint):
     BASE_URL = 'https://api.spotify.com/v1/playlists'
-
-    def __init__(self, oauth_manager, transformer_cache):
-        self.oauth_manager = oauth_manager
-        self.transformer_cache = transformer_cache
-
-    def _auth_header(self) -> t.Dict[str, str]:
-        token = self.oauth_manager.get_access_token()
-        return {'Authorizaiton': f'Bearer {token.access_token}'}
 
     @_with_transformer('playlists.get')
     def get(self, playlist_id: str):
@@ -237,23 +235,15 @@ class PlaylistEndpoint:
             raise SptfyApiError(f"Error adding items to playlist: {response.reason}")
 
     def remove_from(self, playlist_name: str, songs: t.List[str]):
-        pass
+        raise NotImplementedError()
 
     @_with_transformer('playlists.from_user')
     def from_user(self , user_id: str):
-        pass
+        raise NotImplementedError()
 
 
-class ArtistsEndpoint:
+class ArtistsEndpoint(_Endpoint):
     BASE_URL = 'https://api.spotify.com/v1/artists'
-
-    def __init__(self, oauth_manager, transformer_cache):
-        self.oauth_manager = oauth_manager
-        self.transformer_cache = transformer_cache
-
-    def _auth_header(self) -> t.Dict[str, str]:
-        token = self.oauth_manager.get_access_token()
-        return {'Authorizaiton': f'Bearer {token.access_token}'}
 
     @_with_transformer('artists.get')
     def get(self, artist_id: str):
@@ -295,16 +285,8 @@ class ArtistsEndpoint:
         return response.json()
 
 
-class AlbumsEndpoint:
+class AlbumsEndpoint(_Endpoint):
     BASE_URL = 'https://api.spotify.com/v1/albums'
-
-    def __init__(self, oauth_manager, transformer_cache):
-        self.oauth_manager = oauth_manager
-        self.transformer_cache = transformer_cache
-
-    def _auth_header(self) -> t.Dict[str, str]:
-        token = self.oauth_manager.get_access_token()
-        return {'Authorizaiton': f'Bearer {token.access_token}'}
 
     @_with_transformer('albums.get')
     def get(self, album_id: str):
@@ -344,3 +326,4 @@ class AlbumsEndpoint:
             raise SptfyApiError(f'Error searching albums: {search_term} - {response.reason}')
 
         return response.json()
+

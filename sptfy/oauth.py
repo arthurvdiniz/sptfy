@@ -6,16 +6,17 @@
     flows.
 """
 import os
+import abc
 import json
 import time
 import webbrowser
 import base64
 import secrets
-
 from enum import Enum
 from urllib.parse import urlencode
 from typing import Optional, List, Dict, Union
-from requests import Session, HTTPError
+
+from requests import Session
 
 import sptfy.utils as utils
 from sptfy.types import JsonDict
@@ -309,7 +310,7 @@ def _build_url(credentials: ClientCredentials) -> str:
     return f'{OAUTH_AUTHORIZATION_ENDPOINT}?{params}'
 
 
-class StubCache:
+class TokenCache:
     """
         Implements the interface necessary for a token cache but does nothing.
         It's used by default.
@@ -321,7 +322,7 @@ class StubCache:
         return None
 
 
-class FileCache:
+class FileCache(TokenCache):
     """
         Implements a file based token cache, saving the token as json.
     """
@@ -345,9 +346,9 @@ class FileCache:
             return None
 
 
-class AuthStrategy:
+class StateGenerator:
     """
-    Mixin which generates a random string for OAuth validation.
+    Generates a random string for OAuth validation.
     Avoids Cross-Site Request Forgery attacks.
     Not used yet.
     """
@@ -360,7 +361,13 @@ class AuthStrategy:
         return self.current_state == state
 
 
-class TerminalPromptAuth:
+class AuthStrategy(abc.ABC):
+    @abc.abstractmethod
+    def authorize(self, credentials: ClientCredentials) -> OAuthToken:
+        pass
+
+
+class TerminalPromptAuth(AuthStrategy):
     """
         Implements an authentication flow that is appropriated for
         terminal based connections. It uses the webbrowser module
@@ -378,7 +385,7 @@ class TerminalPromptAuth:
         return utils.retrieve_token(authorization_code, credentials)
 
 
-class WebBackendAuth:
+class WebBackendAuth(AuthStrategy):
     """
     Implements the authorizaiton flow for a web backend server.
 
@@ -390,8 +397,27 @@ class WebBackendAuth:
             redirect_url=_build_url(credentials)
         )
 
-        
-class ClientCredentialsFlow:
+
+class OAuthManager(abc.ABC):
+    """
+    Represents an OAuth token manager.
+
+    The manager main responsibility is to return an oauth access token
+    and manage it's lifecycle (i.e. refreshing and storage).
+    """
+    @abc.abstractmethod
+    def get_access_token(self) -> OAuthToken:
+        """
+        Should return the [OAuthToken] used to authorize the client
+        to access OAuth protected resources.
+
+        This implementor should handle refreshing and saving the token,
+        if necessary.
+        """
+        pass
+
+
+class ClientCredentialsFlow(OAuthManager):
     """
         Manages getting an access token using the Spotify API client
         credentials flow. This flow is used when the client is not
@@ -462,7 +488,7 @@ class ClientCredentialsFlow:
         return token
 
 
-class AuthorizationCodeFlow:
+class AuthorizationCodeFlow(OAuthManager):
     """
         Manages getting an OAuth access token from the spotify WEB API using
         the authorization code flow. This flow is necessary to access user
@@ -475,7 +501,13 @@ class AuthorizationCodeFlow:
         -------
         get_access_token() -> returns an OAuthToken for the user
     """
-    def __init__(self, credentials, token_cache=None, auth_strategy=None):
+
+    def __init__(
+        self, 
+        credentials: ClientCredentials, 
+        token_cache: Optional[TokenCache] = None, 
+        auth_strategy: Optional[AuthStrategy] = None
+    ):
         """
         The token cache is an object implementing two methods:
         save_token(OAuthToken) and load_token(), allowing to persist the token
@@ -483,8 +515,8 @@ class AuthorizationCodeFlow:
         is not persisted.
 
         The auth_strategy is an object implementing
-        authorize(ClientCredentials) and on_authorization_response() that
-        allows the client to redirect the user to the authentication endpoint
+        authorize(ClientCredentials) that allows the client to redirect 
+        the user to the authentication endpoint
         in different ways (e.g. opening a web browser window or using HTTP
         redirection).
 
@@ -507,7 +539,7 @@ class AuthorizationCodeFlow:
         if token_cache:
             self.token_cache = token_cache
         else:
-            self.token_cache = StubCache()
+            self.token_cache = TokenCache()
 
         if auth_strategy:
             self.auth_strategy = auth_strategy
