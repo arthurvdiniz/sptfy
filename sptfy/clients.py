@@ -72,6 +72,45 @@ class SpotifySession:
             self.transformer_cache.update(cached_transformers)
 
 
+class AsyncSpotifySession:
+    def __init__(self, oauth_manager, transformer_cache, context=None):
+        self.oauth_manager = oauth_manager
+        self.transformer_cache = dict(transformer_cache) # Shallow copy
+        self.context = context
+
+        self.tracks = AsyncEndpoint(
+            TracksEndpoint(self.oauth_manager, self.transformer_cache)
+        )
+        self.playlists = AsyncEndpoint(
+            PlaylistEndpoint(self.oauth_manager, self.transformer_cache)
+        )
+        self.artists = AsyncEndpoint(
+            ArtistsEndpoint(self.oauth_manager, self.transformer_cache)
+        )
+        self.albums = AsyncEndpoint(
+            AlbumsEndpoint(self.oauth_manager, self.transformer_cache)
+        )
+
+    @contextmanager
+    def disable_transformers(self):
+        """
+        A context manager that temporarily disables this 
+        Spotify client's transformers in case the user needs 
+        to retrieve more data than it's given by the transformer.
+
+        Usage
+        -------
+        with sess.disable_transformers():
+            sess.tracks.get('some-id')
+        """
+        try:
+            cached_transformers = dict(self.transformer_cache)
+            self.transformer_cache.clear() 
+            yield
+        finally:
+            self.transformer_cache.update(cached_transformers)
+
+
 class Spotify(_SpotifyClient):
     """
     Represents an user session to the Spotify Web API.
@@ -107,17 +146,11 @@ class AsyncSpotify(_SpotifyClient):
     ):
         super().__init__(oauth_manager)
 
-        self.playlists = AsyncEndpoint(
-            PlaylistEndpoint(self.oauth_manager, self.transformer_cache)
-        )
-        self.tracks = AsyncEndpoint(
-            TracksEndpoint(self.oauth_manager, self.transformer_cache)
-        )
-        self.artists = AsyncEndpoint(
-            ArtistsEndpoint(self.oauth_manager, self.transformer_cache)
-        )
-        self.albums = AsyncEndpoint(
-            AlbumsEndpoint(self.oauth_manager, self.transformer_cache)
+    def session(self, context=None) -> AsyncSpotifySession:
+        return AsyncSpotifySession(
+            self.oauth_manager,
+            self.transformer_cache,
+            context
         )
 
 

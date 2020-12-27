@@ -12,6 +12,7 @@ import time
 import webbrowser
 import base64
 import secrets
+import time
 from enum import Enum
 from urllib.parse import urlencode
 from typing import Optional, List, Dict, Union
@@ -87,14 +88,16 @@ class OAuthToken:
             access_token: str,
             scope: List[str],
             expires_in: int,
+            created_at: int,
             token_type: str,
-            refresh_token: Optional[str] = None
+            refresh_token: Optional[str] = None,
     ):
         """
         :param access_token: The OAuth access_token, used when accessing
             protected resources
         :param scope: The list of scopes assigned to this token
         :param expires_in: time in seconds until this token expires
+        :param created_at: time in seconds 
         :param token_type: The OAuth token type (normally set to 'Bearer')
         :param refresh_token: Used in authorization code flow so the client
             can request new tokens without redirecting the user.
@@ -102,6 +105,7 @@ class OAuthToken:
         self.access_token = access_token
         self.scope = scope
         self.expires_in = expires_in
+        self.created_at = created_at
         self.token_type = token_type
         if refresh_token:
             self.refresh_token = refresh_token
@@ -140,7 +144,7 @@ class OAuthToken:
         """
         Gives the time when the token will expire as seconds since epoch
         """
-        return self._expires_at
+        return int(self.created_at) + self.expires_in
 
     @property
     def is_expired(self) -> bool:
@@ -149,6 +153,17 @@ class OAuthToken:
         """
         now = int(time.time())
         return self.expires_at - now < 60
+
+    @staticmethod
+    def created_now(json: JsonDict):
+        """
+        Creates a new OAuthToken object and uses the time 
+        in seconds since epoch as its creation time (i.e. 
+        the created_at attribute is set to int(time.time())).
+        """
+        created_at = int(time.time())
+        json['created_at'] = created_at
+        return OAuthToken.from_json(json)
 
     @staticmethod
     def from_json(json: JsonDict):
@@ -162,6 +177,7 @@ class OAuthToken:
             json['access_token'],
             scopes,
             json['expires_in'],
+            json['created_at'],
             json['token_type'],
             json.get('refresh_token')
         )
@@ -175,6 +191,7 @@ class OAuthToken:
             'scope': ' '.join(self.scope),
             'token_type': self.token_type,
             'expires_in': self.expires_in,
+            'created_at': self.created_at,
             'expires_at': self.expires_at,
         }
         if self.refresh_token:
@@ -387,7 +404,7 @@ class TerminalPromptAuth(AuthStrategy):
 
 class WebBackendAuth(AuthStrategy):
     """
-    Implements the authorizaiton flow for a web backend server.
+    Implements the authorization flow for a web backend server.
 
     The methods are aimed to be used in views.
     """

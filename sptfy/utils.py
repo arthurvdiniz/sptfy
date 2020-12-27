@@ -38,7 +38,7 @@ def retrieve_token(
             error_description=error_response['error_description']
         )
 
-    return oauth.OAuthToken.from_json(response.json())
+    return oauth.OAuthToken.created_now(response.json())
 
 
 async def run_async(func, *args, **kwargs):
