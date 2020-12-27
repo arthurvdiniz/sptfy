@@ -84,9 +84,10 @@ def test_search_should_hit_correct_endpoint(
     )
 
     spot = Spotify(oauth_manager=manager)
+    sess = spot.session()
 
     # When: searching for a playlist
-    end = getattr(spot, endpoint)
+    end = getattr(sess, endpoint)
     search_func = getattr(end, 'search')
     response = search_func(item_name)
 
@@ -119,7 +120,8 @@ def test_spotify_get_should_call_endpoint(
 
     # When: trying to retrieve a track
     spot = Spotify(oauth_manager=oauth_manager)
-    end = getattr(spot, endpoint)
+    sess = spot.session()
+    end = getattr(sess, endpoint)
     get_func = getattr(end, 'get')
     response = get_func(item_id)
 
@@ -150,11 +152,12 @@ def test_endpoints_should_raise_exception_if_not_200(
         token_cache=file_cache_with_token
     )
     spot = Spotify(oauth_manager=oauth_manager)
+    sess = spot.session()
 
     # When: getting a inexistent track
     # Then: an exception should be raised
     with pytest.raises(SptfyApiError) as exc:
-        end = getattr(spot, endpoint)
+        end = getattr(sess, endpoint)
         method_func = getattr(end, method)
         method_func(**params)
 

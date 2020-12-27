@@ -40,10 +40,11 @@ def test_oauth_save_token_should_only_be_called_once_with_terminal_auth(
     )
 
     sptfy = Spotify(oauth_manager=manager)
+    sess = sptfy.session()
 
     # When: calling any function 
     # (which will trigger authorization since cache is empty)
-    sptfy.tracks.get(track_id)
+    sess.tracks.get(track_id)
 
     # Then: save_token should only be called once
     cache.save_token.assert_called_once_with(token)

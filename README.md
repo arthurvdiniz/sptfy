@@ -16,32 +16,36 @@ from sptfy.clients import Spotify
 # Authentication is done on the first call to the API (but this might change)
 sptf = Spotify()
 
+# A session allows context to be passed into the client 
+# (in case request information is needed for storage of tokens)
+sess = sptf.session()
+
 # Retrieves an Spotify track (i.e. song)
-track = sptf.tracks.get('track-id')
-playlist = sptf.playlists.get('playlist-id')
-album = sptf.albums.get('album-id')
-artist = sptf.artists.get('artist-id')
+track = sess.tracks.get('track-id')
+playlist = sess.playlists.get('playlist-id')
+album = sess.albums.get('album-id')
+artist = sess.artists.get('artist-id')
 
 # Searching
-track = sptf.tracks.search('Feel Good Inc.')
-playlist = sptf.playlists.search('Best of 2019')
-album = sptf.albums.search('To Pimp a Butterfly')
-artist = sptf.artists.search('Snarky Puppy')
+track = sess.tracks.search('Feel Good Inc.')
+playlist = sess.playlists.search('Best of 2019')
+album = sess.albums.search('To Pimp a Butterfly')
+artist = sess.artists.search('Snarky Puppy')
 
 # Playlist manipulation
-sptf.playlists.create('My Awesome Playlist', songs=['some-song-id', 'another-song-id'])
-sptf.playlists.add_to('awesome-playlist-id', songs=['song-1-id', 'song-2-id'])
-sptf.playlists.remove_from('awesome-playlist_id', songs=['song-1-id'])
+sess.playlists.create('My Awesome Playlist', songs=['some-song-id', 'another-song-id'])
+sess.playlists.add_to('awesome-playlist-id', songs=['song-1-id', 'song-2-id'])
+sess.playlists.remove_from('awesome-playlist_id', songs=['song-1-id'])
 
 # Current user information
-user_albums = sptf.user.albums()
-user_tracks = sptf.user.tracks()
-user_playlists = sptf.user.playlists()
-user_profile = sptf.user.profile()
+user_albums = sess.user.albums()
+user_tracks = sess.user.tracks()
+user_playlists = sess.user.playlists()
+user_profile = sess.user.profile()
 
 # Audio Analysis
-features = sptfy.tracks.audio_features('track-id')
-analysis = sptfy.tracks.audio_analysis('track-id')
+features = sess.tracks.audio_features('track-id')
+analysis = sess.tracks.audio_analysis('track-id')
 ```
 
 ### Transformers
@@ -56,14 +60,17 @@ sptf = Spotify()
 def get_track_result_names(api_response):
     return [track['name'] for track in api_response['tracks']['items']]
 
+# A session will obtain a copy of the registered transformers
+sess = sptf.session()
+
 # Receives a list of track names instead of json object
-track_names = sptf.tracks.search('The Good Song')
+track_names = sess.tracks.search('The Good Song')
 for name in track_names:
   print(name)
 
 # Temporarily disables current transformers
-with sptf.disable_transformers():
-  json_response = sptf.tracks.search('The Good Song')
+with sess.disable_transformers():
+  json_response = sess.tracks.search('The Good Song')
 
 # The result will now be a json object since the transformer was disabled
 print(json_response['tracks']['items'])
@@ -74,7 +81,7 @@ print(json_response['tracks']['items'])
 def get_track_items(api_response):
   return api_response['tracks']['items']
 
-track_items = sptf.tracks.search('The Good Song', transformer=get_track_items)
+track_items = sess.tracks.search('The Good Song', transformer=get_track_items)
 for track_item in track_items:
     print(track_item)
 ```

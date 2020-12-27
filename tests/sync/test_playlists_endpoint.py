@@ -31,9 +31,10 @@ def test_playlists_add_to_should_hit_correct_endpoint(
     )
 
     sptfy = Spotify(oauth_manager=manager)
+    sess = sptfy.session()
 
     # When: trying to add songs to a playlist
-    sptfy.playlists.add_to(playlist_id, songs=tracks)
+    sess.playlists.add_to(playlist_id, songs=tracks)
 
     # Then: it should hit the correct endpoint
 
@@ -87,9 +88,10 @@ def test_playlists_create_should_hit_correct_endpoint(
     )
 
     sptfy = Spotify(oauth_manager=manager)
+    sess = sptfy.session()
 
     # When: trying to create a playlist
-    sptfy.playlists.create(playlist_name, songs=songs)
+    sess.playlists.create(playlist_name, songs=songs)
 
     # Then: it should hit the correct endpoint without errors
 

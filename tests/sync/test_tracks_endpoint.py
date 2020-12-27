@@ -29,7 +29,8 @@ def test_spotify_tracks_get_should_call_endpoint(
 
     # When: trying to retrieve a track
     sptfy = Spotify(oauth_manager=oauth_manager)
-    response = sptfy.tracks.get(track_id=track_id)
+    sess = sptfy.session()
+    response = sess.tracks.get(track_id=track_id)
 
     assert response['track'] == {'name': 'Labyrinth', 'artist': 'Surf Disco'} 
 
@@ -59,7 +60,8 @@ def test_spotify_tracks_get_should_accept_transform(
 
     # When: trying to retrieve a track with a specific transformer
     sptfy = Spotify(oauth_manager=oauth_manager)
-    response = sptfy.tracks.get(track_id=track_id, transformer=retrieve_name)
+    sess = sptfy.session()
+    response = sess.tracks.get(track_id=track_id, transformer=retrieve_name)
 
     # Then: the result should be the given by the transformer 
     # instead of the json
@@ -93,8 +95,9 @@ def test_spotify_tracks_get_should_accept_cached_transform(
     def retrieve_name(response):
         return response['track']['name']
 
+    sess = sptfy.session()
     # When: trying to retrieve a track with a specific transformer
-    response = sptfy.tracks.get(track_id=track_id)
+    response = sess.tracks.get(track_id=track_id)
 
     assert response == 'Labyrinth'
 
@@ -131,9 +134,10 @@ def test_tracks_search_should_hit_correct_endpoint(
     )
 
     sptfy = Spotify(oauth_manager=oauth_manager)
+    sess = sptfy.session()
 
     # When: searching for a track
-    response = sptfy.tracks.search(track_name)
+    response = sess.tracks.search(track_name)
 
     # Then: it should receive a list of track objects 
     # that matches the query
@@ -162,7 +166,8 @@ def test_tracks_audio_features_should_call_correct_endpoint(
 
     # When: trying to retrieve a track
     sptfy = Spotify(oauth_manager=oauth_manager)
-    response = sptfy.tracks.audio_features(track_id=track_id)
+    sess = sptfy.session()
+    response = sess.tracks.audio_features(track_id=track_id)
 
     # TODO: change these assertions to query matchers from responses
     assert response['id'] == track_id 
@@ -192,7 +197,8 @@ def test_tracks_audio_analysis_should_call_correct_endpoint(
 
     # When: trying to retrieve a track
     sptfy = Spotify(oauth_manager=oauth_manager)
-    response = sptfy.tracks.audio_analysis(track_id=track_id)
+    sess = sptfy.session()
+    response = sess.tracks.audio_analysis(track_id=track_id)
 
     # TODO: change this assertion to query matchers from responses
     assert response == analysis

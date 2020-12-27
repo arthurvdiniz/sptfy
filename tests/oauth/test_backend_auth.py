@@ -17,11 +17,12 @@ def test_web_backend_auth_should_throw_exception_if_no_token_cached(
     strategy = oauth.WebBackendAuth()
     manager = oauth.AuthorizationCodeFlow(credentials, token_file_cache, strategy)
     sptfy = Spotify(oauth_manager=manager)
+    sess = sptfy.session()
 
     # When: trying to hit an API endpoint
     # Then: it should raise an error
     with pytest.raises(SptfyOAuthRedirect):
-        sptfy.tracks.get(track_id)
+        sess.tracks.get(track_id)
 
 @responses.activate
 def test_web_backend_auth_shouldnt_throw_exception_if_token_is_available(
@@ -41,9 +42,10 @@ def test_web_backend_auth_shouldnt_throw_exception_if_token_is_available(
     strategy = oauth.WebBackendAuth()
     manager = oauth.AuthorizationCodeFlow(credentials, file_cache_with_token, strategy)
     sptfy = Spotify(oauth_manager=manager)
+    sess = sptfy.session()
 
     # When: trying to hit an API endpoint
-    response = sptfy.tracks.get(track_id)
+    response = sess.tracks.get(track_id)
 
     # Then: the endpoint should be hit
     assert response['track'] == {'name': 'Labyrinth', 'artist': 'Surf Curse'}
