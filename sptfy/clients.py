@@ -1,9 +1,8 @@
-import asyncio
 import functools
 from typing import (
-    Optional, Any, Callable, Union
+    Optional, Any, Callable, Union,
 )
-from contextlib import contextmanager, asynccontextmanager
+from contextlib import contextmanager
 
 import sptfy.oauth as oauth
 import sptfy.utils as utils
@@ -14,16 +13,7 @@ from sptfy.endpoints import (
 
 
 class _SpotifyClient:
-    def __init__(
-        self, 
-        oauth_manager: Optional[oauth.OAuthManager] = None
-    ):
-        if oauth_manager:
-            self.oauth_manager = oauth_manager
-        else:
-            credentials = oauth.ClientCredentials.from_env_variables()
-            self.oauth_manager = oauth.AuthorizationCodeFlow(credentials)
-
+    def __init__(self):
         self.transformer_cache = {}
 
     def transformer(self, endpoint: str):
@@ -73,6 +63,11 @@ class SpotifySession:
 
 
 class AsyncSpotifySession:
+    tracks: TracksEndpoint
+    playlists: PlaylistEndpoint
+    artists: ArtistsEndpoint
+    albums: AlbumsEndpoint
+
     def __init__(self, oauth_manager, transformer_cache, context=None):
         self.oauth_manager = oauth_manager
         self.transformer_cache = dict(transformer_cache) # Shallow copy
@@ -124,7 +119,13 @@ class Spotify(_SpotifyClient):
         self, 
         oauth_manager: Optional[oauth.OAuthManager] = None
     ):
-        super().__init__(oauth_manager)
+        super().__init__()
+
+        if oauth_manager:
+            self.oauth_manager = oauth_manager
+        else:
+            credentials = oauth.ClientCredentials.from_env_variables()
+            self.oauth_manager = oauth.AuthorizationCodeFlow(credentials)
 
     def session(self, context=None) -> SpotifySession:
         return SpotifySession(
@@ -135,16 +136,19 @@ class Spotify(_SpotifyClient):
 
 
 class AsyncSpotify(_SpotifyClient):
-    tracks: TracksEndpoint
-    playlists: PlaylistEndpoint
-    artists: ArtistsEndpoint
-    albums: AlbumsEndpoint
-
     def __init__(
         self, 
         oauth_manager: Optional[oauth.OAuthManager] = None
     ):
-        super().__init__(oauth_manager)
+        super().__init__()
+
+        if oauth_manager:
+            self.oauth_manager = oauth_manager
+        else:
+            credentials = oauth.ClientCredentials.from_env_variables()
+            self.oauth_manager = oauth.AuthorizationCodeFlow(credentials)
+
+        self.oauth_manager = oauth.LockOAuthManager(self.oauth_manager)
 
     def session(self, context=None) -> AsyncSpotifySession:
         return AsyncSpotifySession(

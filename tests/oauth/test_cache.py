@@ -1,4 +1,5 @@
 import re
+import time
 import unittest.mock as mock
 
 import responses
@@ -16,6 +17,7 @@ def test_oauth_save_token_should_only_be_called_once_with_terminal_auth(
         access_token='some-random-token',
         token_type='Bearer',
         expires_in=3600,
+        created_at=int(time.time()),
         scope=['foo', 'bar']
     )
 

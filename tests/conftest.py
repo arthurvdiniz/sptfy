@@ -1,3 +1,5 @@
+import time
+
 import pytest
 
 import sptfy.oauth as oauth
@@ -40,6 +42,7 @@ def file_cache_with_token(token_file_cache):
         access_token='some-random-token',
         token_type='Bearer',
         expires_in=3600,
+        created_at=int(time.time()),
         scope=['foo', 'bar']
     )
 

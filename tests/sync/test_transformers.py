@@ -5,31 +5,10 @@ import sptfy.oauth as oauth
 from sptfy.clients import Spotify
 
 
-@pytest.fixture
-def token_file_cache(tmp_path):
-    """
-    Creates a token cache with a fake OAuth token,
-    so that the tests avoid authenticating with the
-    API.
-    """
-    token = oauth.OAuthToken(
-        access_token='some-random-token',
-        token_type='Bearer',
-        expires_in=3600,
-        scope=['foo', 'bar']
-    )
-
-    cache_file = tmp_path / '.cache'
-    cache = oauth.FileCache(cache_file)
-    cache.save_token(token)
-
-    return cache
-
-
 @responses.activate
 def test_spotify_disable_transformers_should_reset_transformers_temporarily(
     sptfy_environment, 
-    token_file_cache
+    file_cache_with_token
 ):
     track_id = 'some-track-id'
     responses.add(
@@ -40,7 +19,7 @@ def test_spotify_disable_transformers_should_reset_transformers_temporarily(
     )
 
     credentials = oauth.ClientCredentials.from_env_variables()
-    oauth_manager = oauth.AuthorizationCodeFlow(credentials, token_cache=token_file_cache)
+    oauth_manager = oauth.AuthorizationCodeFlow(credentials, token_cache=file_cache_with_token)
 
     sptfy = Spotify(oauth_manager=oauth_manager)
 

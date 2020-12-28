@@ -13,6 +13,7 @@ import webbrowser
 import base64
 import secrets
 import time
+import threading
 from enum import Enum
 from urllib.parse import urlencode
 from typing import Optional, List, Dict, Union
@@ -79,6 +80,7 @@ class OAuthToken:
     access_token: str
     scope: List[str]
     expires_in: int
+    created_at: int
     token_type: str
     refresh_token: Optional[str] = None
     _expires_at: int
@@ -110,7 +112,7 @@ class OAuthToken:
         if refresh_token:
             self.refresh_token = refresh_token
 
-        self._expires_at = int(time.time()) + self.expires_in
+        self._expires_at = int(self.created_at) + self.expires_in
 
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, OAuthToken):
@@ -428,10 +430,35 @@ class OAuthManager(abc.ABC):
         Should return the [OAuthToken] used to authorize the client
         to access OAuth protected resources.
 
-        This implementor should handle refreshing and saving the token,
+        The implementation should handle refreshing and saving the token,
         if necessary.
         """
         pass
+
+
+class LockOAuthManager(OAuthManager):
+    """
+     Not a very good implementation of a thread safe oauth token
+     manager.
+
+     Most of the times tokens will be retrieved from memory,
+     which means the lock wont be locked for a long time.
+
+     In the worst case, the lock will remain locked for 
+     an full http request period.
+
+     But if one thread needed to retrieve the token from the
+     API, the same would have to happen to the other threads,
+     so I believe the waiting penalty would happen anyway.
+    """
+    def __init__(self, oauth_manager: OAuthManager):
+        self.lock = threading.Lock()
+        self.oauth_manager = oauth_manager
+
+    def get_access_token(self) -> OAuthToken:
+        with self.lock:
+            return self.oauth_manager.get_access_token()
+
 
 
 class ClientCredentialsFlow(OAuthManager):
@@ -487,7 +514,7 @@ class ClientCredentialsFlow(OAuthManager):
         if response.status_code != 200:
             raise SptfyOAuthError(response.reason)
 
-        return OAuthToken.from_json(response.json())
+        return OAuthToken.created_now(response.json())
 
     def get_access_token(self) -> OAuthToken:
         """
@@ -636,7 +663,7 @@ class AuthorizationCodeFlow(OAuthManager):
 
         json_response = response.json()
         json_response['refresh_token'] = old_token.refresh_token
-        return OAuthToken.from_json(json_response)
+        return OAuthToken.created_now(json_response)
 
     # TODO: This method will be handled by the auth_strategy
     def _request_access_token(self) -> OAuthToken:

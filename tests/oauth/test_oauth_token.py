@@ -18,6 +18,7 @@ def test_oauth_token_from_json():
         'access_token':  'random-string-from-server',
         'scope': 'foo bar',
         'expires_in': 3600,
+        'created_at': 12345,
         'token_type': 'Bearer',
     }
 
@@ -41,7 +42,7 @@ def test_oauth_token_expires_at(mock_time):
     }
 
     mock_time.return_value = 10
-    oauth_token = oauth.OAuthToken.from_json(token)
+    oauth_token = oauth.OAuthToken.created_now(token)
 
     # WHEN: expires_at is called
     # THEN: The expiration timestamp should be returned
@@ -63,7 +64,7 @@ def test_oauth_token_is_expired(mock_time):
         'token_type': 'Bearer',
     }
 
-    token = oauth.OAuthToken.from_json(json_token)
+    token = oauth.OAuthToken.created_now(json_token)
 
     # THEN: token should not be expired after 30 seconds
     assert not token.is_expired

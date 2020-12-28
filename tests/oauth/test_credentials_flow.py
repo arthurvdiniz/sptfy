@@ -55,6 +55,7 @@ def test_oauth_client_credentials_request_token(sptfy_environment):
         'access_token':  'random-string-from-server',
         'scope': 'foo bar',
         'expires_in': 3600,
+        'created_at': 12345,
         'token_type': 'Bearer'
     }
 
@@ -121,7 +122,7 @@ def test_oauth_client_credentials_successful_get_access_token(sptfy_environment)
     token = credentials_flow.get_access_token()
 
     # THEN: It should return the token from either the API or memory
-    assert token == oauth.OAuthToken.from_json(some_token)
+    assert token == oauth.OAuthToken.created_now(some_token)
     # The token should be saved in the manager memory,
     # so it's able to refresh when needed
     assert credentials_flow._current_token == token
@@ -137,8 +138,9 @@ def test_oauth_client_credentials_get_access_token_with_expired(mock_time, sptfy
     mock_time.side_effect = time_initial_values([0, 90])
     expired_token = oauth.OAuthToken(
         access_token='its-expired',
-        scope='foo bar',
+        scope=['foo', 'bar'],
         expires_in=100,
+        created_at=int(time.time()),
         token_type='Bearer'
     )
 
@@ -163,7 +165,7 @@ def test_oauth_client_credentials_get_access_token_with_expired(mock_time, sptfy
     token = credentials_flow.get_access_token()
 
     # THEN: the flow manager should replace the expired token
-    assert credentials_flow._current_token == oauth.OAuthToken.from_json(some_token)
+    assert credentials_flow._current_token == oauth.OAuthToken.created_now(some_token)
     # The returned token should be the new one instead of the expired
     assert token == oauth.OAuthToken.from_json(some_token)
 
@@ -180,10 +182,10 @@ def test_oauth_client_credentials_should_return_from_memory_if_not_expired(mock_
     }
 
     credentials_flow = oauth.ClientCredentialsFlow()
-    credentials_flow._current_token = oauth.OAuthToken.from_json(some_token)
+    credentials_flow._current_token = oauth.OAuthToken.created_now(some_token)
 
     # WHEN: get_access_token is called with a non expired token
     token = credentials_flow.get_access_token()
 
     # THEN: the token returned should come from memory
-    assert token == oauth.OAuthToken.from_json(some_token)
+    assert token == oauth.OAuthToken.created_now(some_token)

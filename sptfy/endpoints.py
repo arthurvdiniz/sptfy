@@ -67,6 +67,9 @@ class TracksEndpoint(_Endpoint):
 
     @_with_transformer('tracks.search')
     def search(self, search_term: str) -> JsonDict:
+        """
+        Search for a track on spotify
+        """
         top_url = os.path.dirname(self.BASE_URL)
         search_url = f"{top_url}/search"
 

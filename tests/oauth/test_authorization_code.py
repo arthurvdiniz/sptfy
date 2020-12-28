@@ -7,6 +7,7 @@ import pytest
 import responses
 
 import sptfy.oauth as oauth
+import sptfy.utils as utils
 
 
 @pytest.fixture()
@@ -15,6 +16,7 @@ def token_with_refresh():
         access_token='random-token-from-server',
         scope=['foo', 'bar'],
         expires_in=3600,
+        created_at=int(time.time()),
         token_type='Bearer',
         refresh_token='refresh-token-from-server',
     )
@@ -40,6 +42,7 @@ def test_oauth_token_file_cache_save_to_file(tmp_path):
         access_token='some-random-token',
         token_type='Bearer',
         expires_in=3600,
+        created_at=12345,
         scope=['foo', 'bar']
     )
     # and an empty file
@@ -60,6 +63,7 @@ def test_oauth_token_file_cache_restore(tmp_path):
         'access_token': 'another-random-token',
         'token_type': 'Bearer',
         'expires_in': 3600,
+        'created_at': 12345,
         'scope': 'foo bar'
     }
     # and a cache file with a loaded token
@@ -189,11 +193,15 @@ def test_oauth_authorization_code_refresh_token_not_200(token_with_refresh, sptf
         auth_flow._refresh_token(token_with_refresh)
 
 
+# TODO: move these two tests to a more appropiate place
 @responses.activate
 def test_oauth_authorization_code_request_access_token(sptfy_environment):
     # GIVEN: An authorization strategy which returns the code from the
     # authorize endpoint
+    auth_code = 'code-from-server'
     mock_strategy = Mock()
+    mock_strategy.authorize.side_effect = lambda cred: utils.retrieve_token(auth_code, cred)
+
     client_id, client_secret, redirect_uri = sptfy_environment
     credentials = oauth.ClientCredentials(
         client_id,
@@ -222,18 +230,14 @@ def test_oauth_authorization_code_request_access_token(sptfy_environment):
     )
 
     # WHEN: _request_access_token is called
-    token = auth_flow._request_access_token()
+    token = auth_flow.get_access_token()
 
     # THEN: the access_token should be returned
-    assert token == oauth.OAuthToken.from_json(some_token)
+    assert token == oauth.OAuthToken.created_now(some_token)
 
 
 @responses.activate
 def test_oauth_authorization_code_request_access_token_correct_input(sptfy_environment):
-    # GIVEN: an authorization strategy
-    mock_strategy = Mock()
-    mock_strategy.on_authorization_response.return_value = 'code-from-server'
-
     client_id, client_secret, redirect_uri = sptfy_environment
     credentials = oauth.ClientCredentials(
         client_id,
@@ -248,6 +252,10 @@ def test_oauth_authorization_code_request_access_token_correct_input(sptfy_envir
         'expires_in': 3600,
     }
 
+    auth_code = 'code-from-server'
+    mock_strategy = Mock()
+    mock_strategy.authorize.side_effect = lambda cred: utils.retrieve_token(auth_code, cred)
+
     # the API returns correctly (200)
     responses.add(
         responses.POST,
@@ -260,9 +268,9 @@ def test_oauth_authorization_code_request_access_token_correct_input(sptfy_envir
         credentials,
         auth_strategy=mock_strategy
     )
-    
-    # WHEN: request_access_token is called
-    auth_flow._request_access_token()
+
+    # WHEN: get_access_token is called
+    auth_flow.get_access_token()
 
     request_sent = responses.calls[0].request
     auth_header = credentials._authorization_header()
@@ -270,10 +278,10 @@ def test_oauth_authorization_code_request_access_token_correct_input(sptfy_envir
     assert request_sent.headers['Authorization'] == auth_header['Authorization']
     # the payload should be constructed
     assert 'redirect_uri' in request_sent.body
-    assert "code-from-server" in request_sent.body
+    assert auth_code in request_sent.body
     # the authorization strategy methods should be called
     assert mock_strategy.authorize.call_args == call(credentials)
-    assert mock_strategy.on_authorization_response.called
+    #assert mock_strategy.on_authorization_response.called
 
 
 @patch('sptfy.oauth.time.time')
@@ -286,6 +294,7 @@ def test_authorization_code_get_access_token_from_memory(mock_time, sptfy_enviro
         token_type='Bearer',
         scope=['foo', 'bar'],
         expires_in=3600,
+        created_at=int(time.time())
     )
 
     # GIVEN: An AuthorizationCodeFlow with a non-expired token in memory
@@ -312,6 +321,7 @@ def test_authorization_code_loads_from_cache_if_not_in_memory(mock_validate_toke
         access_token='new-token',
         token_type='Bearer',
         scope=['foo', 'bar'],
+        created_at=int(time.time()),
         expires_in=3600,
     )
 
@@ -349,6 +359,7 @@ def test_authorization_code_gets_token_from_api(sptfy_environment):
         access_token='new-token',
         token_type='Bearer',
         scope=['foo', 'bar'],
+        created_at=int(time.time()),
         expires_in=3600,
     )
 
@@ -390,6 +401,7 @@ def test_authorization_code_get_access_token_refreshs_if_expired(mock_time, sptf
         token_type='Bearer',
         scope=['foo', 'bar'],
         expires_in=-1,  # expires the token
+        created_at=int(time.time()),
         refresh_token='refresh-me'
     )
 
@@ -431,6 +443,7 @@ def test_authorization_code_saves_if_its_new_token(sptfy_environment):
         token_type='Bearer',
         scope=['foo', 'bar'],
         expires_in=-1,  # expires the token
+        created_at=int(time.time()),
         refresh_token='refresh-me'
     )
 
