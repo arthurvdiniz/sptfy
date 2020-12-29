@@ -1,8 +1,12 @@
+import os
+import sys
 import time
 
 import pytest
 
 import sptfy.oauth as oauth
+
+sys.path.append(os.path.join(os.path.dirname(__file__), 'helpers'))
 
 
 @pytest.fixture()
